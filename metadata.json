@@ -1,0 +1,9 @@
+{
+  "name": "Aplikasi Ketua RW 018",
+  "description": "Sistem Informasi & Manajemen Administrasi Terpadu RW 018 (Layanan Warga, Keamanan & CCTV, Pembangunan Lingkungan, Pengaduan, Bansos, RKM, UMKM, Kas & Iuran, Data PBB & SHM, dan Administrasi Surat).",
+    "requestFramePermissions": [
+      "camera",
+      "microphone"
+    ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

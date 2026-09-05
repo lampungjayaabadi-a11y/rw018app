@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Test connection doc
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // User accounts collection
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isValidId(userId);
+    }
+
+    // RW Profile
+    match /profile/{profileId} {
+      allow read: if true;
+      allow write: if isValidId(profileId);
+    }
+
+    // Warga Collection
+    match /warga/{wargaId} {
+      allow read: if true;
+      allow write: if isValidId(wargaId);
+    }
+
+    // Kartu Keluarga Collection
+    match /kk/{kkId} {
+      allow read: if true;
+      allow write: if isValidId(kkId);
+    }
+
+    // Kas Collection
+    match /kas/{kasId} {
+      allow read: if true;
+      allow write: if isValidId(kasId);
+    }
+
+    // Iuran Warga Collection
+    match /iuran/{iuranId} {
+      allow read: if true;
+      allow write: if isValidId(iuranId);
+    }
+
+    // Surat Pengantar Collection
+    match /surat/{suratId} {
+      allow read: if true;
+      allow write: if isValidId(suratId);
+    }
+
+    // Iuran RKM Collection
+    match /iuran_rkm/{rkmId} {
+      allow read: if true;
+      allow write: if isValidId(rkmId);
+    }
+
+    // Warga Meninggal Collection
+    match /warga_meninggal/{meninggalId} {
+      allow read: if true;
+      allow write: if isValidId(meninggalId);
+    }
+
+    // Perlengkapan RKM Collection
+    match /perlengkapan_rkm/{itemId} {
+      allow read: if true;
+      allow write: if isValidId(itemId);
+    }
+
+    // Keamanan & Pembangunan Collection
+    match /keamanan/{progId} {
+      allow read: if true;
+      allow write: if isValidId(progId);
+    }
+
+    // Bansos Collection
+    match /bansos/{bansosId} {
+      allow read: if true;
+      allow write: if isValidId(bansosId);
+    }
+
+    // Cadangan Penerima Bansos Collection
+    match /cadangan_bansos/{cadanganId} {
+      allow read: if true;
+      allow write: if isValidId(cadanganId);
+    }
+
+    // UMKM Collection
+    match /umkm/{umkmId} {
+      allow read: if true;
+      allow write: if isValidId(umkmId);
+    }
+
+    // Kegiatan Collection
+    match /kegiatan/{kegiatanId} {
+      allow read: if true;
+      allow write: if isValidId(kegiatanId);
+    }
+
+    // Pengaduan Collection
+    match /pengaduan/{pengaduanId} {
+      allow read: if true;
+      allow write: if isValidId(pengaduanId);
+    }
+
+    // PBB Collection
+    match /pbb/{pbbId} {
+      allow read: if true;
+      allow write: if isValidId(pbbId);
+    }
+
+    // Jadwal Ronda Malam Collection
+    match /jadwal_ronda/{rondaId} {
+      allow read: if true;
+      allow write: if isValidId(rondaId);
+    }
+
+    // Absensi / Presensi Ronda Malam Collection
+    match /absensi_ronda/{absensiId} {
+      allow read: if true;
+      allow write: if isValidId(absensiId);
+    }
+  }
+}
