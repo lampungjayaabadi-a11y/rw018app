@@ -6,6 +6,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: '/rw018app/',
     plugins: [
       react(),
       tailwindcss(),
@@ -28,30 +29,30 @@ export default defineConfig(() => {
           'peta-satelit-rw018.jpg'
         ],
         manifest: {
-          id: '/',
+          id: '/rw018app/',
           name: 'Aplikasi Administrasi RW 018',
           short_name: 'RW 018',
           description: 'Aplikasi Administrasi RW 018 Kampung Banten, Kelurahan Iringmulyo, Kota Metro.',
           theme_color: '#065f46',
           background_color: '#065f46',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: '/rw018app/',
+          scope: '/rw018app/',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: '/rw018app/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: '/pwa-512x512.png',
+              src: '/rw018app/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any'
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: '/rw018app/pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable'
