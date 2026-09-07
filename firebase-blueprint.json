@@ -1,0 +1,357 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Accounts",
+      "description": "Pengguna aplikasi dan hak akses multi-user RT/RW",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique user ID" },
+        "username": { "type": "string", "description": "Username for login" },
+        "password": { "type": "string", "description": "Hashed or secret credential" },
+        "nama": { "type": "string", "description": "Full name of the user" },
+        "role": { "type": "string", "description": "Role permission: admin_rw, sekretaris, bendahara, ketua_rt, keamanan, pengurus_rkm, warga" },
+        "roleLabel": { "type": "string", "description": "Human readable label of role" },
+        "rtAccess": { "type": "string", "description": "ALL or RT number e.g. 039" },
+        "noHp": { "type": "string", "description": "Phone number" },
+        "email": { "type": "string", "description": "Email address" },
+        "isActive": { "type": "boolean", "description": "Active status" },
+        "description": { "type": "string", "description": "Short description" },
+        "lastLogin": { "type": "string", "description": "ISO timestamp of last login" }
+      },
+      "required": ["id", "username", "nama", "role", "isActive"]
+    },
+    "profile": {
+      "title": "RW Profile",
+      "description": "Profil administrasi dan data kelembagaan RW 018",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaRw": { "type": "string" },
+        "nomorRw": { "type": "string" },
+        "kelurahan": { "type": "string" },
+        "kecamatan": { "type": "string" },
+        "kotaKab": { "type": "string" },
+        "provinsi": { "type": "string" },
+        "kodePos": { "type": "string" },
+        "ketuaRw": { "type": "string" },
+        "alamatSekretariat": { "type": "string" },
+        "noHp": { "type": "string" },
+        "email": { "type": "string" },
+        "logoUrl": { "type": "string" }
+      },
+      "required": ["id", "namaRw", "nomorRw", "kelurahan", "kecamatan", "kotaKab"]
+    },
+    "warga": {
+      "title": "Data Warga",
+      "description": "Data kependudukan penduduk RW 018",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nik": { "type": "string" },
+        "noKk": { "type": "string" },
+        "nama": { "type": "string" },
+        "tempatLahir": { "type": "string" },
+        "tanggalLahir": { "type": "string" },
+        "jenisKelamin": { "type": "string" },
+        "agama": { "type": "string" },
+        "pekerjaan": { "type": "string" },
+        "statusKawin": { "type": "string" },
+        "statusKeluarga": { "type": "string" },
+        "rt": { "type": "string" },
+        "alamat": { "type": "string" },
+        "noHp": { "type": "string" },
+        "golDarah": { "type": "string" },
+        "pendidikan": { "type": "string" },
+        "isDisabilitas": { "type": "boolean" },
+        "isLansia": { "type": "boolean" },
+        "isDudaJanda": { "type": "boolean" },
+        "statusDomisili": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "nik", "noKk", "nama", "rt"]
+    },
+    "kk": {
+      "title": "Kartu Keluarga",
+      "description": "Data Kepala Keluarga dan anggota",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noKk": { "type": "string" },
+        "kepalaKeluarga": { "type": "string" },
+        "nikKepala": { "type": "string" },
+        "rt": { "type": "string" },
+        "alamat": { "type": "string" },
+        "telepon": { "type": "string" },
+        "statusEkonomi": { "type": "string" },
+        "jumlahAnggota": { "type": "number" },
+        "anggotaIds": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "noKk", "kepalaKeluarga", "rt"]
+    },
+    "kas": {
+      "title": "Buku Kas RW",
+      "description": "Transaksi kas pemasukan dan pengeluaran",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "jenis": { "type": "string" },
+        "kategori": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "saldoSetelah": { "type": "number" },
+        "penanggungJawab": { "type": "string" },
+        "noBukti": { "type": "string" },
+        "rt": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "jenis", "kategori", "jumlah"]
+    },
+    "iuran": {
+      "title": "Iuran Bulanan Warga",
+      "description": "Catatan iuran bulanan RT / RW",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noKk": { "type": "string" },
+        "namaKepala": { "type": "string" },
+        "rt": { "type": "string" },
+        "bulanTahun": { "type": "string" },
+        "nominal": { "type": "number" },
+        "status": { "type": "string" },
+        "tanggalBayar": { "type": "string" },
+        "penerima": { "type": "string" },
+        "kuitansiNo": { "type": "string" }
+      },
+      "required": ["id", "noKk", "namaKepala", "rt", "bulanTahun", "nominal", "status"]
+    },
+    "surat": {
+      "title": "Layanan Surat Pengantar",
+      "description": "Pengajuan dan riwayat surat pengantar RT/RW",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nomorSurat": { "type": "string" },
+        "jenisSurat": { "type": "string" },
+        "nikPemohon": { "type": "string" },
+        "namaPemohon": { "type": "string" },
+        "rt": { "type": "string" },
+        "alamat": { "type": "string" },
+        "keperluan": { "type": "string" },
+        "tanggalPengajuan": { "type": "string" },
+        "status": { "type": "string" },
+        "catatan": { "type": "string" },
+        "ttdKetuaRt": { "type": "string" },
+        "ttdKetuaRw": { "type": "string" },
+        "tanggalSelesai": { "type": "string" }
+      },
+      "required": ["id", "nomorSurat", "jenisSurat", "nikPemohon", "namaPemohon", "rt", "status"]
+    },
+    "iuran_rkm": {
+      "title": "Iuran RKM",
+      "description": "Catatan iuran Rukun Kematian Masyarakat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noKk": { "type": "string" },
+        "namaKepala": { "type": "string" },
+        "rt": { "type": "string" },
+        "bulanTahun": { "type": "string" },
+        "nominal": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "noKk", "namaKepala", "rt", "bulanTahun", "nominal", "status"]
+    },
+    "warga_meninggal": {
+      "title": "Warga Meninggal & Santunan",
+      "description": "Data kematian dan santunan duka RKM",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nik": { "type": "string" },
+        "nama": { "type": "string" },
+        "jenisKelamin": { "type": "string" },
+        "usia": { "type": "number" },
+        "rt": { "type": "string" },
+        "tanggalMeninggal": { "type": "string" },
+        "santunanRkm": { "type": "number" },
+        "statusSantunan": { "type": "string" },
+        "namaAhliWaris": { "type": "string" }
+      },
+      "required": ["id", "nama", "rt", "tanggalMeninggal", "santunanRkm"]
+    },
+    "perlengkapan_rkm": {
+      "title": "Perlengkapan RKM",
+      "description": "Inventaris alat perawatan jenazah & tenda",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "kategori": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "satuan": { "type": "string" },
+        "kondisi": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "namaBarang", "kategori", "jumlah", "status"]
+    },
+    "keamanan": {
+      "title": "Keamanan & Pembangunan",
+      "description": "Program pos ronda, CCTV, dan infrastruktur RW",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaProgram": { "type": "string" },
+        "kategori": { "type": "string" },
+        "lokasi": { "type": "string" },
+        "targetWaktu": { "type": "string" },
+        "anggaran": { "type": "number" },
+        "progressPercent": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "namaProgram", "kategori", "anggaran", "status"]
+    },
+    "bansos": {
+      "title": "Bantuan Sosial",
+      "description": "Penyaluran bantuan sosial PKH, BPNT, BLT, Beras",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nik": { "type": "string" },
+        "noKk": { "type": "string" },
+        "nama": { "type": "string" },
+        "rt": { "type": "string" },
+        "jenisBansos": { "type": "string" },
+        "statusPenyaluran": { "type": "string" },
+        "periode": { "type": "string" }
+      },
+      "required": ["id", "nik", "nama", "rt", "jenisBansos", "statusPenyaluran"]
+    },
+    "umkm": {
+      "title": "UMKM Warga",
+      "description": "Direktori usaha mikro kecil warga RW 018",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaUsaha": { "type": "string" },
+        "namaPemilik": { "type": "string" },
+        "kategori": { "type": "string" },
+        "rt": { "type": "string" },
+        "kontak": { "type": "string" }
+      },
+      "required": ["id", "namaUsaha", "namaPemilik", "kategori", "rt"]
+    },
+    "kegiatan": {
+      "title": "Agenda Kegiatan RW",
+      "description": "Jadwal gotong royong, rapat, dan posyandu",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "judul": { "type": "string" },
+        "kategori": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "lokasi": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "judul", "kategori", "tanggal", "lokasi"]
+    },
+    "pengaduan": {
+      "title": "Pengaduan Warga",
+      "description": "Aduan dan aspirasi warga",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "namaPelapor": { "type": "string" },
+        "rt": { "type": "string" },
+        "kategori": { "type": "string" },
+        "judul": { "type": "string" },
+        "isi": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "namaPelapor", "rt", "kategori", "judul", "isi", "status"]
+    },
+    "pbb": {
+      "title": "PBB-P2 Warga",
+      "description": "Data SPPT dan pembayaran PBB",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nop": { "type": "string" },
+        "tahunPajak": { "type": "string" },
+        "namaWp": { "type": "string" },
+        "rt": { "type": "string" },
+        "tagihan": { "type": "number" },
+        "statusBayar": { "type": "string" }
+      },
+      "required": ["id", "nop", "tahunPajak", "namaWp", "rt", "tagihan", "statusBayar"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Koleksi akun user multi-user RW, RT, Staf, Keamanan, Warga"
+    },
+    "/profile/{profileId}": {
+      "schema": "profile",
+      "description": "Profil dan identitas RW 018"
+    },
+    "/warga/{wargaId}": {
+      "schema": "warga",
+      "description": "Data penduduk RW 018"
+    },
+    "/kk/{kkId}": {
+      "schema": "kk",
+      "description": "Data kartu keluarga"
+    },
+    "/kas/{kasId}": {
+      "schema": "kas",
+      "description": "Buku kas dan transaksi keuangan"
+    },
+    "/iuran/{iuranId}": {
+      "schema": "iuran",
+      "description": "Catatan iuran bulanan warga"
+    },
+    "/surat/{suratId}": {
+      "schema": "surat",
+      "description": "Layanan persuratan online"
+    },
+    "/iuran_rkm/{rkmId}": {
+      "schema": "iuran_rkm",
+      "description": "Catatan iuran kematian"
+    },
+    "/warga_meninggal/{meninggalId}": {
+      "schema": "warga_meninggal",
+      "description": "Data kematian dan santunan"
+    },
+    "/perlengkapan_rkm/{itemId}": {
+      "schema": "perlengkapan_rkm",
+      "description": "Inventaris barang RKM"
+    },
+    "/keamanan/{progId}": {
+      "schema": "keamanan",
+      "description": "Program pembangunan dan keamanan"
+    },
+    "/bansos/{bansosId}": {
+      "schema": "bansos",
+      "description": "Data penerima bansos"
+    },
+    "/umkm/{umkmId}": {
+      "schema": "umkm",
+      "description": "Direktori UMKM"
+    },
+    "/kegiatan/{kegiatanId}": {
+      "schema": "kegiatan",
+      "description": "Agenda kegiatan RW"
+    },
+    "/pengaduan/{pengaduanId}": {
+      "schema": "pengaduan",
+      "description": "Aduan warga"
+    },
+    "/pbb/{pbbId}": {
+      "schema": "pbb",
+      "description": "Data PBB-P2"
+    }
+  }
+}
