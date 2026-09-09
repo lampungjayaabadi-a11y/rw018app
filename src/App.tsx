@@ -21,7 +21,8 @@ import {
   PengaduanItem,
   SuratItem,
   PbbRecord,
-  AppUser
+  AppUser,
+  LaporanKejadian
 } from './types';
 import {
   getRWProfile,
@@ -43,6 +44,7 @@ import {
   getPengaduanList,
   getSuratList,
   getPbbList,
+  getLaporanKejadianList,
   saveWarga,
   deleteWarga,
   saveKk,
@@ -80,6 +82,8 @@ import {
   deletePbb,
   bayarPbbTahunBerjalan,
   bayarTunggakanPbb,
+  saveLaporanKejadian,
+  deleteLaporanKejadian,
   subscribeToStorage
 } from './services/storage';
 import {
@@ -109,6 +113,7 @@ import { KegiatanView } from './components/KegiatanView';
 import { PengaduanView } from './components/PengaduanView';
 import { PbbView } from './components/PbbView';
 import { PetaWilayahView } from './components/PetaWilayahView';
+import { LaporanKejadianView } from './components/LaporanKejadianView';
 import { MenuView } from './components/MenuView';
 import { LoginView } from './components/LoginView';
 
@@ -196,6 +201,7 @@ export default function App() {
   const [pengaduanList, setPengaduanList] = useState<PengaduanItem[]>([]);
   const [suratList, setSuratList] = useState<SuratItem[]>([]);
   const [pbbList, setPbbList] = useState<PbbRecord[]>([]);
+  const [laporanKejadianList, setLaporanKejadianList] = useState<LaporanKejadian[]>([]);
 
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -226,6 +232,7 @@ export default function App() {
     setPengaduanList(getPengaduanList());
     setSuratList(getSuratList());
     setPbbList(getPbbList());
+    setLaporanKejadianList(getLaporanKejadianList());
   };
 
   useEffect(() => {
@@ -552,6 +559,8 @@ export default function App() {
                   iuranRkmList={iuranRkmList}
                   wargaMeninggalList={wargaMeninggalList}
                   perlengkapanRkmList={perlengkapanRkmList}
+                  wargaList={wargaList}
+                  kkList={kkList}
                   onSaveIuranRkm={saveIuranRkm}
                   onDeleteIuranRkm={deleteIuranRkm}
                   onSaveWargaMeninggal={saveWargaMeninggal}
@@ -587,6 +596,21 @@ export default function App() {
                   onDeleteJadwalRonda={deleteJadwalRonda}
                   onSaveAbsensiRonda={saveAbsensiRonda}
                   onDeleteAbsensiRonda={deleteAbsensiRonda}
+                  laporanKejadianList={laporanKejadianList}
+                  onSaveLaporanKejadian={saveLaporanKejadian}
+                  onDeleteLaporanKejadian={deleteLaporanKejadian}
+                  onNavigateTab={handleNavigate}
+                />
+              )}
+
+              {currentTab === 'laporan_kejadian' && (
+                <LaporanKejadianView
+                  profile={profile}
+                  laporanList={laporanKejadianList}
+                  onSaveLaporan={saveLaporanKejadian}
+                  onDeleteLaporan={deleteLaporanKejadian}
+                  currentUser={currentUser}
+                  onBackToKeamanan={() => handleNavigate('keamanan')}
                 />
               )}
 
@@ -660,6 +684,7 @@ export default function App() {
                     kegiatan: kegiatanList.length,
                     pengaduan: pengaduanList.length,
                     surat: suratList.length,
+                    laporanKejadian: laporanKejadianList.length,
                   }}
                 />
               )}

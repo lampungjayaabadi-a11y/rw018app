@@ -17,8 +17,11 @@ if ('serviceWorker' in navigator) {
       }
     }).catch(() => {});
 
+    const baseUrl = import.meta.env.BASE_URL || './';
+    const swUrl = baseUrl.endsWith('/') ? `${baseUrl}sw.js` : `${baseUrl}/sw.js`;
+
     navigator.serviceWorker
-      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .register(swUrl)
       .then((reg) => {
         console.log('[PWA / Service Worker] Berhasil terpasang dengan scope:', reg.scope);
       })
