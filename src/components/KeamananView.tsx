@@ -28,7 +28,10 @@ import {
   Flame,
   Zap,
   Moon,
-  Users
+  Users,
+  FileText,
+  Lock,
+  ShieldAlert
 } from 'lucide-react';
 import {
   KeamananProgramItem,
@@ -38,10 +41,13 @@ import {
   AppUser,
   JadwalRonda,
   AbsensiRondaRecord,
-  Warga
+  Warga,
+  LaporanKejadian,
+  NavTab
 } from '../types';
 import { formatRupiah, generateId } from '../utils/formatters';
 import { RondaMalamView } from './RondaMalamView';
+import { LaporanKejadianView } from './LaporanKejadianView';
 
 interface KeamananViewProps {
   profile: RWProfile;
@@ -58,7 +64,11 @@ interface KeamananViewProps {
   onDeleteJadwalRonda?: (id: string) => void;
   onSaveAbsensiRonda?: (record: AbsensiRondaRecord) => void;
   onDeleteAbsensiRonda?: (id: string) => void;
-  defaultModule?: 'ronda' | 'pembangunan';
+  defaultModule?: 'ronda' | 'pembangunan' | 'lapor_kejadian';
+  laporanKejadianList?: LaporanKejadian[];
+  onSaveLaporanKejadian?: (item: LaporanKejadian) => Promise<boolean>;
+  onDeleteLaporanKejadian?: (id: string) => Promise<boolean>;
+  onNavigateTab?: (tab: NavTab) => void;
 }
 
 export const KeamananView: React.FC<KeamananViewProps> = ({
@@ -77,14 +87,30 @@ export const KeamananView: React.FC<KeamananViewProps> = ({
   onSaveAbsensiRonda,
   onDeleteAbsensiRonda,
   defaultModule = 'ronda',
+  laporanKejadianList = [],
+  onSaveLaporanKejadian = async () => true,
+  onDeleteLaporanKejadian = async () => true,
+  onNavigateTab,
 }) => {
-  const [activeModule, setActiveModule] = useState<'ronda' | 'pembangunan'>(defaultModule);
+  const [activeModule, setActiveModule] = useState<'ronda' | 'pembangunan' | 'lapor_kejadian'>(defaultModule);
   const [selectedKategori, setSelectedKategori] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<KeamananProgramItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<KeamananProgramItem | null>(null);
+  const [restrictedModalOpen, setRestrictedModalOpen] = useState(false);
+
+  const isAuthorizedLaporanKejadian = currentUser ? (
+    currentUser.role === 'ketua_rw' ||
+    currentUser.role === 'admin_rw' ||
+    currentUser.role === 'super_admin' ||
+    currentUser.username.toLowerCase() === 'superadmin' ||
+    currentUser.username.toLowerCase() === 'sa' ||
+    currentUser.username.toLowerCase() === 'admin' ||
+    currentUser.username.toLowerCase() === 'ketuarw' ||
+    (currentUser.nama && currentUser.nama.toLowerCase().includes('eko purwanto'))
+  ) : false;
 
   const [formData, setFormData] = useState<Partial<KeamananProgramItem>>({
     namaProgram: '',
@@ -235,8 +261,8 @@ export const KeamananView: React.FC<KeamananViewProps> = ({
 
   return (
     <div className="space-y-4 p-4 pb-12 max-w-5xl mx-auto">
-      {/* Tab Switcher Utama: Ronda Malam vs Program Pembangunan & CCTV */}
-      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-1.5">
+      {/* Tab Switcher Utama: Ronda Malam vs Program Pembangunan & CCTV vs Lapor Kejadian RW 018 */}
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
         <button
           id="tab-sub-ronda-malam"
           onClick={() => setActiveModule('ronda')}
@@ -268,9 +294,52 @@ export const KeamananView: React.FC<KeamananViewProps> = ({
             {keamananList.length} Program
           </span>
         </button>
+
+        <button
+          id="tab-sub-lapor-kejadian"
+          onClick={() => {
+            if (isAuthorizedLaporanKejadian) {
+              setActiveModule('lapor_kejadian');
+            } else {
+              setRestrictedModalOpen(true);
+            }
+          }}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-black text-xs transition-all cursor-pointer ${
+            activeModule === 'lapor_kejadian'
+              ? 'bg-gradient-to-r from-rose-800 to-rose-950 text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          {isAuthorizedLaporanKejadian ? (
+            <>
+              <FileText className="w-4 h-4 text-rose-300" />
+              <span>Lapor Kejadian RW 018</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800">
+                {laporanKejadianList.length > 0 ? `${laporanKejadianList.length} Laporan` : 'Form Digital'}
+              </span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-3.5 h-3.5 text-rose-500" />
+              <span>Lapor Kejadian RW 018</span>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                Khusus Ketua RW / SA
+              </span>
+            </>
+          )}
+        </button>
       </div>
 
-      {activeModule === 'ronda' ? (
+      {activeModule === 'lapor_kejadian' ? (
+        <LaporanKejadianView
+          profile={profile}
+          laporanList={laporanKejadianList}
+          onSaveLaporan={onSaveLaporanKejadian}
+          onDeleteLaporan={onDeleteLaporanKejadian}
+          currentUser={currentUser}
+          onBackToKeamanan={() => setActiveModule('ronda')}
+        />
+      ) : activeModule === 'ronda' ? (
         <RondaMalamView
           profile={profile}
           wargaList={wargaList}
@@ -359,7 +428,8 @@ export const KeamananView: React.FC<KeamananViewProps> = ({
           >
             <div>
               <span className="text-[10px] font-bold text-slate-400 block uppercase">Bhabinkamtibmas</span>
-              <span className="font-bold text-slate-800 block text-xs group-hover:text-emerald-800">Aiptu Evodius</span>
+              <span className="font-bold text-slate-800 block text-xs group-hover:text-emerald-800">Aipda Evodius</span>
+              <span className="text-[9px] text-slate-500 font-mono block">NRP. 84050233</span>
             </div>
             <div className="mt-1.5 flex items-center justify-between text-emerald-700 font-mono font-bold text-[11px]">
               <span>081379712721</span>
@@ -839,6 +909,44 @@ export const KeamananView: React.FC<KeamananViewProps> = ({
                 Hapus
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restricted Modal for Laporan Kejadian */}
+      {restrictedModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-rose-200 shadow-2xl space-y-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+
+            <div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-200">
+                Akses Dibatasi Khusus
+              </span>
+              <h3 className="text-base font-black text-slate-800 mt-2">
+                Laporan Kejadian RW 018
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Sesuai kebijakan hak akses sistem RW 018, menu <strong>Laporan Kejadian RW 018</strong> bersifat resmi dan kedinasan, hanya dapat dibuka oleh user login <strong>Ketua RW / Super Admin</strong> dan <strong>Eko Purwanto</strong> ketua RW / super admin.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-left text-xs border border-slate-200 text-slate-600 space-y-1">
+              <p><strong>Pengguna Aktif:</strong> {currentUser?.nama || 'Warga / Tamu'}</p>
+              <p><strong>Peran / Jabatan:</strong> {currentUser?.roleLabel || 'Warga'}</p>
+              <p className="text-[11px] text-rose-600 font-semibold pt-1">
+                Status: Tidak memiliki izin membuka formulir dan dokumen Laporan Kejadian.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setRestrictedModalOpen(false)}
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              Mengerti & Tutup
+            </button>
           </div>
         </div>
       )}

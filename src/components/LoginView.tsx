@@ -13,7 +13,9 @@ import {
   Clock,
   Fingerprint,
   ScanFace,
-  Sparkles
+  Sparkles,
+  CreditCard,
+  UserCheck
 } from 'lucide-react';
 import { AppUser, RWProfile } from '../types';
 import { getUsersList, loginUser, getRolePermission, getUserPhotoUrl } from '../services/auth';
@@ -90,15 +92,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setErrorMessage('');
 
     if (!selectedUsername.trim()) {
-      setErrorMessage('Silakan pilih pengguna dari daftar.');
+      setErrorMessage('Silakan pilih akun pengguna terlebih dahulu.');
       return;
     }
 
-    const result = loginUser(selectedUsername, isWargaRole ? undefined : password);
+    if (isWargaRole) {
+      const inputNik = password.trim();
+      if (!inputNik) {
+        setErrorMessage('Wajib memasukkan password yaitu NIK warga terdaftar di data induk warga.');
+        passwordInputRef.current?.focus();
+        return;
+      }
+    }
+
+    const result = loginUser(selectedUsername, password);
     if (result.success && result.user) {
       onLoginSuccess(result.user);
     } else {
-      setErrorMessage(result.message || 'Login gagal. Periksa kata sandi Anda.');
+      setErrorMessage(result.message || (isWargaRole ? 'Anda Bukan warga RW 018' : 'Login gagal. Periksa kata sandi Anda.'));
     }
   };
 
@@ -170,16 +181,50 @@ export const LoginView: React.FC<LoginViewProps> = ({
       {/* Form Login */}
       <form onSubmit={handleFormLogin} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-lg space-y-4">
         {errorMessage && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+          <div className="p-3 bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs rounded-xl flex items-center gap-2.5 font-bold animate-in fade-in duration-200">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{errorMessage}</span>
+            <span className="leading-snug">{errorMessage}</span>
           </div>
         )}
 
-        {/* 1. Drop Down User Name & Profile Photo Preview */}
+        {/* Pilihan Mode Login: Pengurus vs Warga */}
+        <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => {
+              const pengurus = allUsers.find((u) => u.role !== 'warga');
+              if (pengurus) handleUserSelectChange(pengurus.username);
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              !isWargaRole
+                ? 'bg-white text-emerald-950 shadow-xs border border-slate-200 font-extrabold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Pengurus RW / RT</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const warga = allUsers.find((u) => u.role === 'warga');
+              if (warga) handleUserSelectChange(warga.username);
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              isWargaRole
+                ? 'bg-emerald-700 text-white shadow-xs font-extrabold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5 text-amber-300" />
+            <span>Warga RW 018 (Login NIK)</span>
+          </button>
+        </div>
+
+        {/* 1. User Selection & Profile Card */}
         <div>
           <label className="block text-xs font-bold text-slate-800 mb-1.5">
-            Nama Pengguna (User Name)
+            {isWargaRole ? 'Level Login' : 'Nama Pengguna (User Name)'}
           </label>
 
           {/* Selected User Profile Card with Photo */}
@@ -207,26 +252,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           )}
 
-          <div className="relative">
-            <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <select
-              value={selectedUsername}
-              onChange={(e) => handleUserSelectChange(e.target.value)}
-              className="w-full pl-10 pr-8 py-2.5 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none transition-all cursor-pointer shadow-2xs"
-            >
-              {allUsers.map((u) => (
-                <option key={u.id} value={u.username}>
-                  {u.nama} — [{u.roleLabel}]
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs font-bold">
-              ▼
+          {!isWargaRole && (
+            <div className="relative">
+              <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={selectedUsername}
+                onChange={(e) => handleUserSelectChange(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 appearance-none transition-all cursor-pointer shadow-2xs"
+              >
+                {allUsers.map((u) => (
+                  <option key={u.id} value={u.username}>
+                    {u.nama} — [{u.roleLabel}]
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-xs font-bold">
+                ▼
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* 2. Input Password dengan Simbol Sidik Jari di Ujung Kolom */}
+        {/* 2. Input Password / NIK Warga */}
         {!isWargaRole ? (
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -305,13 +352,49 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-emerald-900">
-              <p className="font-bold">Akses Mandiri Warga (Surat & Pengaduan)</p>
-              <p className="text-[11px] text-emerald-700 mt-0.5">
-                Warga dapat langsung masuk tanpa password untuk membuat surat pengantar RT/RW, menyampaikan laporan pengaduan & aspirasi warga, serta memantau info keamanan.
-              </p>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Password (NIK Warga Terdaftar)</span>
+              </label>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                Wajib 16 Digit NIK
+              </span>
+            </div>
+
+            <div className="relative">
+              <CreditCard className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                ref={passwordInputRef}
+                type={showPassword ? 'text' : 'password'}
+                inputMode="numeric"
+                maxLength={16}
+                placeholder="Masukkan 16 digit NIK terdaftar di Data Induk Warga..."
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-12 py-2.5 text-xs font-mono font-medium tracking-wider bg-emerald-50/50 border-2 border-emerald-500/70 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 transition-all text-slate-900"
+                autoComplete="current-password"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                title={showPassword ? 'Sembunyikan NIK' : 'Lihat NIK'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="mt-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-2.5 text-[11px] text-emerald-900 leading-relaxed shadow-2xs">
+              <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Verifikasi Identitas Warga RW 018:</p>
+                <p className="text-emerald-800 mt-0.5">
+                  Wajib memasukkan kata sandi yaitu <strong>NIK yang terdaftar di Data Induk Warga RW 018</strong>. Apabila NIK tidak ditemukan dalam data warga induk, sistem akan menolak akses dengan pesan: <em>"Anda Bukan warga RW 018"</em>.
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -324,7 +407,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
           >
             <LogIn className="w-4 h-4 text-amber-300" />
             <span>
-              {isWargaRole ? 'Masuk Layanan Warga (Tanpa Password)' : 'Masuk ke Sistem'}
+              {isWargaRole ? 'Masuk Layanan Warga (Verifikasi NIK)' : 'Masuk ke Sistem'}
             </span>
           </button>
         </div>

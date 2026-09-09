@@ -26,24 +26,58 @@ import {
   PhoneCall,
   ShieldCheck,
   Sparkles,
-  Check
+  Check,
+  Eye,
+  CreditCard,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  Scale,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Building,
+  UserCheck,
+  FileSpreadsheet,
+  AlertTriangle,
+  History,
+  Coins,
+  ArrowRight
 } from 'lucide-react';
 import {
   IuranRkmRecord,
   WargaMeninggalRecord,
   PerlengkapanRkmItem,
   RWProfile,
-  Gender
+  Gender,
+  Warga,
+  KartuKeluarga,
+  BulanIuranItem
 } from '../types';
 import { formatRupiah, formatTanggalIndo, generateId } from '../utils/formatters';
 import { exportRkmModule, exportToCsv, formatIuranRkmForExport, formatWargaMeninggalForExport, formatPerlengkapanRkmForExport } from '../utils/exportUtils';
 import { ExportButton } from './ExportButton';
+import { RkmCardModal } from './RkmCardModal';
+import { RkmReportModal } from './RkmReportModal';
+import {
+  getCollectorByRt,
+  generateDefault12Bulan,
+  calculate12BulanSummary,
+  calculateSaldoRkmSummary,
+  getRkmPaymentStatus,
+  PembayaranTerakhirInfo,
+  SaldoRkmRwSummary,
+  SaldoRkmRtItem,
+  NAMA_BULAN_RKM
+} from '../utils/rkmUtils';
 
 interface RkmViewProps {
   profile: RWProfile;
   iuranRkmList: IuranRkmRecord[];
   wargaMeninggalList: WargaMeninggalRecord[];
   perlengkapanRkmList: PerlengkapanRkmItem[];
+  wargaList?: Warga[];
+  kkList?: KartuKeluarga[];
   onSaveIuranRkm: (item: IuranRkmRecord) => void;
   onDeleteIuranRkm: (id: string) => void;
   onSaveWargaMeninggal: (item: WargaMeninggalRecord) => void;
@@ -60,6 +94,8 @@ export const RkmView: React.FC<RkmViewProps> = ({
   iuranRkmList = [],
   wargaMeninggalList = [],
   perlengkapanRkmList = [],
+  wargaList = [],
+  kkList = [],
   onSaveIuranRkm,
   onDeleteIuranRkm,
   onSaveWargaMeninggal,
@@ -70,8 +106,8 @@ export const RkmView: React.FC<RkmViewProps> = ({
   onSearchChange,
   onCreateSuratKematian,
 }) => {
-  // Active Sub-tab in RKM View: iuran | meninggal | perlengkapan | pengurus
-  const [activeSubTab, setActiveSubTab] = useState<'iuran' | 'meninggal' | 'perlengkapan' | 'pengurus'>('iuran');
+  // Active Sub-tab in RKM View: iuran | meninggal | perlengkapan | pengurus | saldo
+  const [activeSubTab, setActiveSubTab] = useState<'iuran' | 'meninggal' | 'perlengkapan' | 'pengurus' | 'saldo'>('iuran');
 
   // Filters
   const [selectedRt, setSelectedRt] = useState<string>('ALL');
@@ -79,16 +115,25 @@ export const RkmView: React.FC<RkmViewProps> = ({
 
   // Helper to determine collector name by RT
   const getPetugasPenarikByRt = (rt: string) => {
-    if (rt === '039') return 'Ketua RT 039 (Zaenal Fanani)';
-    if (rt === '040') return 'Ketua RT 040 (Epi)';
-    if (rt === '041') return 'Ketua RT 041 (Etty Herawati)';
-    if (rt === '042') return 'Ketua RT 042 (Sefrizal)';
-    return `Pengurus RKM ${profile.namaRw}`;
+    return getCollectorByRt(rt).nama;
   };
 
   // Modal States
   const [isIuranModalOpen, setIsIuranModalOpen] = useState(false);
   const [editingIuran, setEditingIuran] = useState<IuranRkmRecord | null>(null);
+
+  // 12-Month Card Modal
+  const [selectedCardForView, setSelectedCardForView] = useState<IuranRkmRecord | null>(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+
+  // Laporan Saldo Modal
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportModalInitialRt, setReportModalInitialRt] = useState<string>('ALL');
+
+  // Resident search/select in modal
+  const [wargaSearchQuery, setWargaSearchQuery] = useState('');
+  const [isWargaDropdownOpen, setIsWargaDropdownOpen] = useState(false);
+  const [duplicateSwitchNotice, setDuplicateSwitchNotice] = useState<string | null>(null);
 
   const [isMeninggalModalOpen, setIsMeninggalModalOpen] = useState(false);
   const [editingMeninggal, setEditingMeninggal] = useState<WargaMeninggalRecord | null>(null);
@@ -105,13 +150,17 @@ export const RkmView: React.FC<RkmViewProps> = ({
   // Forms
   const [iuranForm, setIuranForm] = useState<Partial<IuranRkmRecord>>({
     noKk: '',
+    nik: '',
     namaKepala: '',
     rt: '039',
-    bulanTahun: '2026-08',
-    nominal: 25000,
+    bulanTahun: '2026',
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: new Date().toISOString().split('T')[0],
-    penerima: 'Ketua RT 039 (Zaenal Fanani)',
+    penerima: getCollectorByRt('039').nama,
+    noRekening: `RKM-039-0012`,
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 8, false, getCollectorByRt('039').nama)
   });
 
   const [meninggalForm, setMeninggalForm] = useState<Partial<WargaMeninggalRecord>>({
@@ -152,7 +201,9 @@ export const RkmView: React.FC<RkmViewProps> = ({
       const matchSearch =
         !q ||
         item.namaKepala.toLowerCase().includes(q) ||
+        (item.nik && item.nik.includes(q)) ||
         item.noKk.includes(q) ||
+        (item.noRekening && item.noRekening.toLowerCase().includes(q)) ||
         item.rt.includes(q) ||
         item.bulanTahun.includes(q);
       const matchRt = selectedRt === 'ALL' || item.rt === selectedRt;
@@ -190,35 +241,369 @@ export const RkmView: React.FC<RkmViewProps> = ({
 
   // Statistics
   const totalIuranTerkumpul = useMemo(() => {
-    return iuranRkmList
-      .filter((i) => i.status === 'Lunas')
-      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+    return iuranRkmList.reduce((acc, curr) => {
+      if (curr.rincian12Bulan && curr.rincian12Bulan.length > 0) {
+        const sumPaid = curr.rincian12Bulan.reduce((s, b) => b.bayar ? s + (b.nominal || 0) : s, 0);
+        return acc + sumPaid;
+      }
+      return acc + (curr.status === 'Lunas' ? (curr.nominal || 0) : 0);
+    }, 0);
   }, [iuranRkmList]);
 
   const totalSantunanDisalurkan = useMemo(() => {
     return wargaMeninggalList.reduce((acc, curr) => acc + (curr.santunanRkm || 0), 0);
   }, [wargaMeninggalList]);
 
-  // Handlers for Iuran
+  // Matching resident from wargaList based on NIK or Nama
+  const matchedWarga = useMemo(() => {
+    const nikInput = (iuranForm.nik || '').trim();
+    const namaInput = (iuranForm.namaKepala || '').trim().toLowerCase();
+
+    if (nikInput.length >= 8) {
+      const found = wargaList.find((w) => w.nik === nikInput || w.nik.startsWith(nikInput));
+      if (found) return found;
+    }
+    if (namaInput.length >= 3) {
+      const foundExact = wargaList.find((w) => w.nama.toLowerCase() === namaInput);
+      if (foundExact) return foundExact;
+      const foundPartial = wargaList.find((w) => w.nama.toLowerCase().includes(namaInput));
+      if (foundPartial && (!iuranForm.rt || foundPartial.rt === iuranForm.rt)) return foundPartial;
+    }
+    return null;
+  }, [iuranForm.nik, iuranForm.namaKepala, iuranForm.rt, wargaList]);
+
+  // Check if citizen already exists in iuranRkmList
+  const existingIuranRecord = useMemo(() => {
+    const nik = (iuranForm.nik || matchedWarga?.nik || '').trim();
+    const noKk = (iuranForm.noKk || matchedWarga?.noKk || '').trim();
+    const nama = (iuranForm.namaKepala || matchedWarga?.nama || '').trim().toLowerCase();
+    const rt = iuranForm.rt || matchedWarga?.rt;
+
+    if (!nik && !noKk && !nama) return null;
+
+    return (
+      iuranRkmList.find((item) => {
+        // Exclude current item if editing
+        if (editingIuran && item.id === editingIuran.id) return false;
+
+        // 1. Match by NIK
+        if (nik && item.nik && item.nik === nik) return true;
+        // 2. Match by No KK (ignore general dummy)
+        if (noKk && item.noKk && item.noKk === noKk && !item.noKk.startsWith('1872021001260000')) return true;
+        // 3. Match by exact Nama and RT
+        if (nama && item.namaKepala.toLowerCase().trim() === nama && (!rt || item.rt === rt)) return true;
+        return false;
+      }) || null
+    );
+  }, [iuranForm.nik, iuranForm.noKk, iuranForm.namaKepala, iuranForm.rt, matchedWarga, iuranRkmList, editingIuran]);
+
+  // Duplicate detected when in Add mode and matching record already exists
+  const isDuplicateDetected = !editingIuran && !!existingIuranRecord;
+
+  // Active record to evaluate payment status (either existing record or editing record)
+  const activeRecordForPayment = editingIuran || existingIuranRecord || null;
+  const currentPaymentStatus = useMemo(() => {
+    if (activeRecordForPayment) {
+      return getRkmPaymentStatus(activeRecordForPayment);
+    }
+    if (iuranForm.rincian12Bulan && iuranForm.rincian12Bulan.length === 12) {
+      return getRkmPaymentStatus(iuranForm as IuranRkmRecord);
+    }
+    return getRkmPaymentStatus(null);
+  }, [activeRecordForPayment, iuranForm]);
+
+  // Handlers for Iuran Form
   const handleOpenAddIuran = () => {
     setEditingIuran(null);
+    setWargaSearchQuery('');
+    setDuplicateSwitchNotice(null);
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const collector = getCollectorByRt('039').nama;
     setIuranForm({
-      noKk: '',
+      noKk: '187202100126' + String(randomSuffix),
+      nik: '',
       namaKepala: '',
       rt: '039',
-      bulanTahun: '2026-08',
-      nominal: 25000,
-      status: 'Lunas',
+      bulanTahun: '2026',
+      tahun: 2026,
+      nominal: 10000,
+      status: 'Belum Lunas',
       tanggalBayar: new Date().toISOString().split('T')[0],
-      penerima: `Pengurus RKM ${profile.namaRw}`,
+      penerima: collector,
+      noRekening: `RKM-039-${randomSuffix}`,
+      rincian12Bulan: generateDefault12Bulan(2026, 10000, 0, false, collector)
     });
     setIsIuranModalOpen(true);
   };
 
   const handleOpenEditIuran = (item: IuranRkmRecord) => {
     setEditingIuran(item);
-    setIuranForm({ ...item });
+    setWargaSearchQuery(item.namaKepala || '');
+    
+    // Ensure rincian12Bulan is valid with 12 items
+    const rincian: BulanIuranItem[] = (item.rincian12Bulan && item.rincian12Bulan.length === 12)
+      ? item.rincian12Bulan
+      : generateDefault12Bulan(
+          item.tahun || 2026,
+          item.nominal || 10000,
+          item.status === 'Lunas' ? 8 : 4,
+          item.nominal === 0,
+          item.penerima || getCollectorByRt(item.rt).nama
+        );
+
+    setIuranForm({
+      ...item,
+      nik: item.nik || '',
+      tahun: item.tahun || 2026,
+      noRekening: item.noRekening || item.kuitansiNo || `RKM-${item.rt}-${item.noKk.slice(-4)}`,
+      rincian12Bulan: rincian
+    });
     setIsIuranModalOpen(true);
+  };
+
+  const handleSwitchToExistingRecord = (existing: IuranRkmRecord) => {
+    handleOpenEditIuran(existing);
+    setDuplicateSwitchNotice(
+      `Sistem dialihkan ke Kartu Iuran "${existing.namaKepala}" (Rek: ${existing.noRekening || existing.noKk}). Anda dapat langsung menambahkan pembayaran bulan yang belum dibayar atau tunggakan.`
+    );
+  };
+
+  const handlePayNextUnpaidMonth = () => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = [...iuranForm.rincian12Bulan];
+    const nextIdx = updated.findIndex((b) => !b.bayar);
+    if (nextIdx < 0) {
+      alert('Semua iuran 12 bulan sudah lunas!');
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    const target = updated[nextIdx];
+    updated[nextIdx] = {
+      ...target,
+      bayar: true,
+      status: target.nominal === 0 ? 'Bebas Iuran (Dhuafa)' : 'Lunas',
+      tanggalBayar: today,
+      keterangan: 'Lunas Kolektor RT',
+      kolektor: iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama
+    };
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handlePayAllRemainingArrears = () => {
+    if (!iuranForm.rincian12Bulan) return;
+    const today = new Date().toISOString().split('T')[0];
+    const updated = iuranForm.rincian12Bulan.map((item) => {
+      if (!item.bayar) {
+        return {
+          ...item,
+          bayar: true,
+          status: item.nominal === 0 ? 'Bebas Iuran (Dhuafa)' : 'Lunas',
+          tanggalBayar: today,
+          keterangan: 'Lunas Kolektor RT',
+          kolektor: iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama
+        };
+      }
+      return item;
+    });
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  // 12-Month Form Operations
+  const handleToggleMonthPaid = (monthIndex: number) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = [...iuranForm.rincian12Bulan];
+    const target = updated[monthIndex];
+    const newBayar = !target.bayar;
+    const today = new Date().toISOString().split('T')[0];
+
+    updated[monthIndex] = {
+      ...target,
+      bayar: newBayar,
+      status: newBayar ? (target.nominal === 0 ? 'Bebas Iuran (Dhuafa)' : 'Lunas') : 'Belum Lunas',
+      tanggalBayar: newBayar ? (target.tanggalBayar || today) : '',
+      keterangan: newBayar ? (target.nominal === 0 ? 'Subsidi Kas RKM RW 018' : 'Lunas Kolektor RT') : 'Belum Bayar'
+    };
+
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleMonthNominalChange = (monthIndex: number, val: number) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = [...iuranForm.rincian12Bulan];
+    updated[monthIndex] = {
+      ...updated[monthIndex],
+      nominal: Math.max(0, val)
+    };
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleMonthTanggalChange = (monthIndex: number, dateVal: string) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = [...iuranForm.rincian12Bulan];
+    updated[monthIndex] = {
+      ...updated[monthIndex],
+      tanggalBayar: dateVal
+    };
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleMonthStatusChange = (monthIndex: number, newStatus: BulanIuranItem['status']) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = [...iuranForm.rincian12Bulan];
+    const isPaid = newStatus === 'Lunas' || newStatus === 'Bebas Iuran (Dhuafa)' || newStatus === 'Titip RT';
+    const today = new Date().toISOString().split('T')[0];
+
+    updated[monthIndex] = {
+      ...updated[monthIndex],
+      status: newStatus,
+      bayar: isPaid,
+      tanggalBayar: isPaid ? (updated[monthIndex].tanggalBayar || today) : '',
+      keterangan: newStatus === 'Bebas Iuran (Dhuafa)' ? 'Subsidi Kas Sosial RKM' : newStatus === 'Titip RT' ? 'Titip Kas RT' : isPaid ? 'Lunas Kolektor' : 'Belum Bayar'
+    };
+
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleBulkCheckAll = (payAll: boolean) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const today = new Date().toISOString().split('T')[0];
+    const updated = iuranForm.rincian12Bulan.map((item) => ({
+      ...item,
+      bayar: payAll,
+      status: payAll ? (item.nominal === 0 ? 'Bebas Iuran (Dhuafa)' : 'Lunas') : ('Belum Lunas' as const),
+      tanggalBayar: payAll ? (item.tanggalBayar || today) : '',
+      keterangan: payAll ? (item.nominal === 0 ? 'Subsidi Kas RKM RW 018' : 'Lunas Kolektor RT') : 'Belum Bayar'
+    }));
+
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleBulkCheckSemester = (sem: 1 | 2) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const today = new Date().toISOString().split('T')[0];
+    const startIdx = sem === 1 ? 0 : 6;
+    const endIdx = sem === 1 ? 5 : 11;
+
+    const updated = iuranForm.rincian12Bulan.map((item, idx) => {
+      if (idx >= startIdx && idx <= endIdx) {
+        return {
+          ...item,
+          bayar: true,
+          status: item.nominal === 0 ? 'Bebas Iuran (Dhuafa)' : 'Lunas',
+          tanggalBayar: item.tanggalBayar || today,
+          keterangan: item.nominal === 0 ? 'Subsidi Kas RKM RW 018' : 'Lunas Kolektor RT'
+        };
+      }
+      return item;
+    });
+
+    setIuranForm({
+      ...iuranForm,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleApplyNominalToAll = (nom: number) => {
+    if (!iuranForm.rincian12Bulan) return;
+    const updated = iuranForm.rincian12Bulan.map((item) => ({
+      ...item,
+      nominal: nom
+    }));
+    setIuranForm({
+      ...iuranForm,
+      nominal: nom,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleSetFreeDhuafa = () => {
+    if (!iuranForm.rincian12Bulan) return;
+    const today = new Date().toISOString().split('T')[0];
+    const updated = iuranForm.rincian12Bulan.map((item) => ({
+      ...item,
+      nominal: 0,
+      bayar: true,
+      status: 'Bebas Iuran (Dhuafa)' as const,
+      tanggalBayar: today,
+      keterangan: 'Subsidi Kas Sosial RKM RW 018'
+    }));
+    setIuranForm({
+      ...iuranForm,
+      nominal: 0,
+      rincian12Bulan: updated
+    });
+  };
+
+  const handleSelectResidentFromList = (warga: Warga) => {
+    const collector = getCollectorByRt(warga.rt).nama;
+    setIuranForm({
+      ...iuranForm,
+      namaKepala: warga.nama,
+      nik: warga.nik,
+      noKk: warga.noKk || iuranForm.noKk || '1872021001260001',
+      rt: warga.rt,
+      penerima: collector,
+      noRekening: `RKM-${warga.rt}-${warga.noKk?.slice(-4) || '0012'}`
+    });
+    setWargaSearchQuery(warga.nama);
+    setIsWargaDropdownOpen(false);
+  };
+
+  // View card modal from form or table
+  const handleViewCard = (record: IuranRkmRecord) => {
+    setSelectedCardForView(record);
+    setIsCardModalOpen(true);
+  };
+
+  const handlePrintCardDirect = (record: IuranRkmRecord) => {
+    setSelectedCardForView(record);
+    setIsCardModalOpen(true);
+  };
+
+  const handleViewCurrentFormCard = () => {
+    if (!iuranForm.namaKepala) {
+      alert('Mohon isi Nama Kepala Keluarga terlebih dahulu untuk melihat kartu.');
+      return;
+    }
+    const tempRecord: IuranRkmRecord = {
+      id: editingIuran ? editingIuran.id : 'preview-temp',
+      noKk: iuranForm.noKk || '1872021001260000',
+      nik: iuranForm.nik || '',
+      namaKepala: iuranForm.namaKepala,
+      rt: iuranForm.rt || '039',
+      bulanTahun: iuranForm.bulanTahun || '2026',
+      tahun: iuranForm.tahun || 2026,
+      nominal: Number(iuranForm.nominal) || 10000,
+      status: (iuranForm.status as 'Lunas' | 'Belum Lunas') || 'Lunas',
+      tanggalBayar: iuranForm.tanggalBayar || new Date().toISOString().split('T')[0],
+      penerima: iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama,
+      kuitansiNo: iuranForm.kuitansiNo || `RKM/${iuranForm.rt || '039'}/2026/01`,
+      noRekening: iuranForm.noRekening || `RKM-${iuranForm.rt || '039'}-0001`,
+      rincian12Bulan: iuranForm.rincian12Bulan
+    };
+    setSelectedCardForView(tempRecord);
+    setIsCardModalOpen(true);
   };
 
   const handleSubmitIuran = (e: React.FormEvent) => {
@@ -227,17 +612,26 @@ export const RkmView: React.FC<RkmViewProps> = ({
       alert('Nama Kepala Keluarga wajib diisi');
       return;
     }
+
+    const rincian = iuranForm.rincian12Bulan || generateDefault12Bulan(2026, 10000, 8, false, iuranForm.penerima);
+    const summary = calculate12BulanSummary(rincian);
+    const isOverallLunas = summary.isFullPaid || summary.sisaTunggakan === 0;
+
     const record: IuranRkmRecord = {
       id: editingIuran ? editingIuran.id : generateId('irkm'),
       noKk: iuranForm.noKk || '1872021001260000',
+      nik: iuranForm.nik || '',
       namaKepala: iuranForm.namaKepala || '',
       rt: iuranForm.rt || '039',
-      bulanTahun: iuranForm.bulanTahun || '2026-08',
-      nominal: Number(iuranForm.nominal) || 0,
-      status: (iuranForm.status as 'Lunas' | 'Belum Lunas') || 'Lunas',
+      bulanTahun: iuranForm.bulanTahun || '2026',
+      tahun: iuranForm.tahun || 2026,
+      nominal: Number(iuranForm.nominal) || 10000,
+      status: isOverallLunas ? 'Lunas' : 'Belum Lunas',
       tanggalBayar: iuranForm.tanggalBayar || new Date().toISOString().split('T')[0],
-      penerima: iuranForm.penerima || `Pengurus RKM ${profile.namaRw}`,
-      kuitansiNo: editingIuran?.kuitansiNo || `RKM/${iuranForm.rt || '039'}/${Date.now().toString().slice(-4)}`
+      penerima: iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama,
+      kuitansiNo: editingIuran?.kuitansiNo || `RKM/${iuranForm.rt || '039'}/${Date.now().toString().slice(-4)}`,
+      noRekening: iuranForm.noRekening || `RKM-${iuranForm.rt || '039'}-${Date.now().toString().slice(-4)}`,
+      rincian12Bulan: rincian
     };
     onSaveIuranRkm(record);
     setIsIuranModalOpen(false);
@@ -363,12 +757,31 @@ export const RkmView: React.FC<RkmViewProps> = ({
     setDeleteConfirm(null);
   };
 
+  // Perhitungan Saldo Kas RKM per RT dan Konsolidasi RW 018
+  const saldoRkmSummary = useMemo(() => {
+    return calculateSaldoRkmSummary(iuranRkmList, wargaMeninggalList, ['039', '040', '041', '042'], 2026);
+  }, [iuranRkmList, wargaMeninggalList]);
+
   const handleExportExcel = () => {
     exportRkmModule(iuranRkmList, wargaMeninggalList, perlengkapanRkmList, 'xlsx');
   };
 
   const handleExportCSV = () => {
-    if (activeSubTab === 'meninggal') {
+    if (activeSubTab === 'saldo') {
+      const dataSaldo = saldoRkmSummary.perRt.map((r, idx) => ({
+        No: idx + 1,
+        Wilayah: r.namaRt,
+        Petugas: r.namaPetugas,
+        'Total KK': r.totalKk,
+        'Penerimaan (Rp)': r.totalPenerimaanIuran,
+        'Tunggakan (Rp)': r.totalTunggakanIuran,
+        'Santunan (Rp)': r.totalSantunanDisalurkan,
+        'Warga Meninggal': r.totalWargaMeninggal,
+        'Saldo Bersih (Rp)': r.saldoBersih,
+        'Tertib (%)': `${r.persentaseLunas}%`,
+      }));
+      exportToCsv(`Rekap_Saldo_Kas_RKM_RW018_${new Date().toISOString().slice(0, 10)}`, dataSaldo);
+    } else if (activeSubTab === 'meninggal') {
       const data = formatWargaMeninggalForExport(wargaMeninggalList);
       exportToCsv(`Rekap_Warga_Meninggal_RKM_RW018_${new Date().toISOString().slice(0, 10)}`, data);
     } else if (activeSubTab === 'perlengkapan') {
@@ -405,6 +818,19 @@ export const RkmView: React.FC<RkmViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setReportModalInitialRt('ALL');
+                setIsReportModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-xs border border-emerald-500/40 transition-all active:scale-95 cursor-pointer"
+              title="Buka Menu Cetak Laporan Saldo RKM"
+            >
+              <Printer className="w-4 h-4 text-amber-300" />
+              <span>Cetak Laporan Saldo RKM</span>
+            </button>
+
             <ExportButton
               label="Ekspor RKM"
               onExportExcel={handleExportExcel}
@@ -414,10 +840,10 @@ export const RkmView: React.FC<RkmViewProps> = ({
             {activeSubTab === 'iuran' && (
               <button
                 onClick={handleOpenAddIuran}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>Input Iuran RKM</span>
+                <CreditCard className="w-4 h-4" />
+                <span>Input / Kelola Kartu Iuran 12 Bulan</span>
               </button>
             )}
             {activeSubTab === 'meninggal' && (
@@ -438,31 +864,47 @@ export const RkmView: React.FC<RkmViewProps> = ({
                 <span>Tambah Inventaris</span>
               </button>
             )}
+            {activeSubTab === 'saldo' && (
+              <button
+                onClick={() => {
+                  setReportModalInitialRt(selectedRt);
+                  setIsReportModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Cetak / PDF Dokumen</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Quick Stats Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-4 border-t border-emerald-700/60 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-4 pt-4 border-t border-emerald-700/60 text-xs">
           <div className="bg-emerald-950/40 p-2.5 rounded-2xl border border-emerald-700/50">
-            <span className="text-[11px] text-emerald-300 block">Total Iuran RKM Masuk</span>
+            <span className="text-[11px] text-emerald-300 block">Total Iuran Masuk</span>
             <span className="text-sm font-black text-amber-300">{formatRupiah(totalIuranTerkumpul)}</span>
           </div>
           <div className="bg-emerald-950/40 p-2.5 rounded-2xl border border-emerald-700/50">
-            <span className="text-[11px] text-emerald-300 block">Total Santunan Disalurkan</span>
-            <span className="text-sm font-black text-emerald-100">{formatRupiah(totalSantunanDisalurkan)}</span>
+            <span className="text-[11px] text-emerald-300 block">Santunan Duka Keluar</span>
+            <span className="text-sm font-black text-rose-300">{formatRupiah(totalSantunanDisalurkan)}</span>
+          </div>
+          <div className="bg-emerald-950/60 p-2.5 rounded-2xl border-2 border-amber-400/80 col-span-2 sm:col-span-1 shadow-xs">
+            <span className="text-[11px] text-amber-300 block font-bold">Saldo Kas RKM RW 018</span>
+            <span className="text-sm font-black text-white">{formatRupiah(totalIuranTerkumpul - totalSantunanDisalurkan)}</span>
           </div>
           <div className="bg-emerald-950/40 p-2.5 rounded-2xl border border-emerald-700/50">
-            <span className="text-[11px] text-emerald-300 block">Data Warga Meninggal</span>
+            <span className="text-[11px] text-emerald-300 block">Warga Meninggal</span>
             <span className="text-sm font-black text-white">{wargaMeninggalList.length} Jiwa</span>
           </div>
           <div className="bg-emerald-950/40 p-2.5 rounded-2xl border border-emerald-700/50">
             <span className="text-[11px] text-emerald-300 block">Perlengkapan Siaga</span>
-            <span className="text-sm font-black text-white">{perlengkapanRkmList.length} Jenis Alat</span>
+            <span className="text-sm font-black text-white">{perlengkapanRkmList.length} Alat</span>
           </div>
         </div>
       </div>
 
-      {/* Main Tab Selector (4 Sub-modules) */}
+      {/* Main Tab Selector (5 Sub-modules) */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-1.5">
         <button
           onClick={() => setActiveSubTab('iuran')}
@@ -511,6 +953,18 @@ export const RkmView: React.FC<RkmViewProps> = ({
           <Users className="w-4 h-4" />
           <span>4. Pengurus & Penarik Iuran</span>
         </button>
+
+        <button
+          onClick={() => setActiveSubTab('saldo')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activeSubTab === 'saldo'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Wallet className="w-4 h-4" />
+          <span>5. Laporan Saldo Kas RKM (RT & RW)</span>
+        </button>
       </div>
 
       {/* Filter and Search Bar for active sub-tab */}
@@ -557,7 +1011,9 @@ export const RkmView: React.FC<RkmViewProps> = ({
           </div>
 
           <div className="text-slate-500 font-medium">
-            Menampilkan {activeSubTab === 'iuran' ? filteredIuran.length : activeSubTab === 'meninggal' ? filteredMeninggal.length : filteredPerlengkapan.length} data
+            {activeSubTab === 'saldo'
+              ? `Rekapitulasi Saldo Kas 4 Wilayah RT & Total RW 018`
+              : `Menampilkan ${activeSubTab === 'iuran' ? filteredIuran.length : activeSubTab === 'meninggal' ? filteredMeninggal.length : filteredPerlengkapan.length} data`}
           </div>
         </div>
       )}
@@ -599,78 +1055,151 @@ export const RkmView: React.FC<RkmViewProps> = ({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="p-3">No. KK & Nama Kepala</th>
-                    <th className="p-3">Wilayah RT</th>
-                    <th className="p-3">Periode</th>
-                    <th className="p-3">Nominal (Rp)</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Tgl Bayar & Kolektor</th>
-                    <th className="p-3 text-right">Aksi</th>
+                    <th className="p-3">Warga & No. Rekening RKM</th>
+                    <th className="p-3">Wilayah & Petugas Kolektor</th>
+                    <th className="p-3">Progres Iuran 12 Bulan</th>
+                    <th className="p-3">Total Terbayar</th>
+                    <th className="p-3">Status Kas</th>
+                    <th className="p-3 text-right">Aksi & Kartu</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredIuran.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3">
-                        <span className="font-bold text-slate-800 block text-xs">{item.namaKepala}</span>
-                        <span className="font-mono text-[10px] text-slate-400">KK: {item.noKk}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-700">
-                          RT {item.rt}
-                        </span>
-                      </td>
-                      <td className="p-3 font-semibold text-slate-700">
-                        {item.bulanTahun}
-                      </td>
-                      <td className="p-3 font-bold text-slate-800">
-                        {item.nominal === 0 ? (
-                          <span className="text-emerald-700 italic">Gratis (Dhuafa)</span>
-                        ) : (
-                          formatRupiah(item.nominal)
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            item.status === 'Lunas'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-500 text-[11px]">
-                        <div>{item.tanggalBayar ? formatTanggalIndo(item.tanggalBayar) : '-'}</div>
-                        <div className="text-[10px] text-slate-400">{item.penerima || '-'}</div>
-                      </td>
-                      <td className="p-3 text-right space-x-1">
-                        <button
-                          onClick={() => handleOpenEditIuran(item)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg"
-                          title="Edit Iuran"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeleteConfirm({
-                              type: 'iuran',
-                              id: item.id,
-                              name: `Iuran RKM ${item.namaKepala} (${item.bulanTahun})`,
-                            })
-                          }
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg"
-                          title="Hapus Iuran"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredIuran.map((item) => {
+                    const summary = calculate12BulanSummary(item.rincian12Bulan);
+                    const percent = Math.round((summary.lunasCount / 12) * 100);
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+                              {item.namaKepala.charAt(0)}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800 block text-xs">{item.namaKepala}</span>
+                              <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-slate-500 font-mono">
+                                <span className="text-emerald-700 font-bold">{item.noRekening || `RKM-${item.rt}-${item.noKk.slice(-4)}`}</span>
+                                <span>•</span>
+                                <span>KK: {item.noKk}</span>
+                                {item.nik && (
+                                  <>
+                                    <span>•</span>
+                                    <span>NIK: {item.nik}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-800 block w-fit mb-0.5">
+                            RT {item.rt}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {item.penerima || getCollectorByRt(item.rt).nama}
+                          </span>
+                        </td>
+                        <td className="p-3 min-w-[140px]">
+                          <div className="flex items-center justify-between text-[10px] font-semibold mb-1">
+                            <span className={summary.isFullPaid ? 'text-emerald-700 font-bold' : 'text-slate-700'}>
+                              {summary.lunasCount}/12 Bulan
+                            </span>
+                            <span className="text-slate-400 font-mono">{percent}%</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                summary.isFullPaid
+                                  ? 'bg-emerald-600'
+                                  : summary.lunasCount >= 6
+                                  ? 'bg-amber-500'
+                                  : 'bg-rose-500'
+                              }`}
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className="p-3 font-bold text-slate-800">
+                          {summary.totalTerbayar === 0 && summary.lunasCount > 0 ? (
+                            <span className="text-emerald-700 italic text-[11px]">Bebas Kas (Dhuafa)</span>
+                          ) : (
+                            <div>
+                              <div>{formatRupiah(summary.totalTerbayar)}</div>
+                              {summary.sisaTunggakan > 0 && (
+                                <div className="text-[10px] font-normal text-rose-500">
+                                  Sisa: {formatRupiah(summary.sisaTunggakan)}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                              summary.isFullPaid || item.status === 'Lunas'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {summary.isFullPaid || item.status === 'Lunas' ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Lunas 12 Bulan</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                <span>{12 - summary.lunasCount} Bln Tertunggak</span>
+                              </>
+                            )}
+                          </span>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Tgl: {item.tanggalBayar ? formatTanggalIndo(item.tanggalBayar) : '-'}
+                          </div>
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleViewCard(item)}
+                              className="flex items-center gap-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                              title="Lihat Kartu Iuran 12 Bulan"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Kartu</span>
+                            </button>
+                            <button
+                              onClick={() => handlePrintCardDirect(item)}
+                              className="p-1.5 text-teal-700 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer"
+                              title="Cetak Kartu Iuran 12 Bulan Resmi"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditIuran(item)}
+                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Kartu Iuran 12 Bulan"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  type: 'iuran',
+                                  id: item.id,
+                                  name: `Iuran RKM ${item.namaKepala} (Rek: ${item.noRekening || item.noKk})`,
+                                })
+                              }
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus Data Iuran"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1026,7 +1555,7 @@ export const RkmView: React.FC<RkmViewProps> = ({
                   Petugas Penarik Iuran RKM ({profile.pengurusRkm?.seksiPenarikIuran || 'Ketua RT'})
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Penarikan iuran RKM Rp 25.000 / KK / bulan dilakukan langsung oleh masing-masing Ketua RT.
+                  Penarikan iuran RKM Rp 10.000 / KK / bulan dilakukan langsung oleh masing-masing Ketua RT.
                 </p>
               </div>
             </div>
@@ -1093,136 +1622,952 @@ export const RkmView: React.FC<RkmViewProps> = ({
         </div>
       )}
 
-      {/* MODAL 1: FORM IURAN RKM */}
-      {isIuranModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden my-6">
-            <div className="bg-emerald-800 p-4 text-white flex items-center justify-between">
+      {/* SUBTAB 5: LAPORAN SALDO KAS RKM PER RT DAN TOTAL RW 018 */}
+      {activeSubTab === 'saldo' && (
+        <div className="space-y-4">
+          {/* Header Card Saldo RKM */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold">
-                  {editingIuran ? 'Edit Iuran RKM' : 'Catat Iuran RKM Baru'}
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                  Laporan Keuangan & Saldo Kas
+                </span>
+                <h3 className="text-base font-black text-slate-800 mt-2 flex items-center gap-2">
+                  <span>Rekapitulasi Saldo Kas RKM per RT & Total {profile.namaRw}</span>
                 </h3>
-                <p className="text-xs text-emerald-200">Rukun Kematian Masyarakat {profile.namaRw}</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Konsolidasi iuran masuk, santunan duka kematian yang disalurkan, serta sisa saldo kas bersih per wilayah RT (039, 040, 041, 042).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportModalInitialRt(selectedRt);
+                    setIsReportModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-amber-300" />
+                  <span>Cetak Laporan Saldo (PDF)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Unduh CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Executive Metric Cards in Saldo Tab */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase text-emerald-900 tracking-wider">
+                    Total Penerimaan Iuran
+                  </span>
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-base font-black text-emerald-900 mt-1">
+                  {formatRupiah(saldoRkmSummary.totalPenerimaanIuran)}
+                </div>
+                <span className="text-[10px] text-emerald-700 block mt-0.5">
+                  {saldoRkmSummary.totalKkLunas} KK Tertib Bayar
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase text-rose-900 tracking-wider">
+                    Total Santunan Duka
+                  </span>
+                  <TrendingDown className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="text-base font-black text-rose-900 mt-1">
+                  {formatRupiah(saldoRkmSummary.totalSantunanDisalurkan)}
+                </div>
+                <span className="text-[10px] text-rose-700 block mt-0.5">
+                  {saldoRkmSummary.totalWargaMeninggal} Jiwa Warga Wafat
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-teal-50 border-2 border-teal-500 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-teal-950 tracking-wider">
+                    Saldo Kas Bersih RW 018
+                  </span>
+                  <Wallet className="w-4 h-4 text-teal-700" />
+                </div>
+                <div className="text-base font-black text-teal-900 mt-1">
+                  {formatRupiah(saldoRkmSummary.totalSaldoBersih)}
+                </div>
+                <span className="text-[10px] text-teal-800 block mt-0.5 font-bold">
+                  Dana Siaga Kas RKM
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase text-amber-900 tracking-wider">
+                    Sisa Piutang / Tunggakan
+                  </span>
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-base font-black text-amber-900 mt-1">
+                  {formatRupiah(saldoRkmSummary.totalTunggakanIuran)}
+                </div>
+                <span className="text-[10px] text-amber-700 block mt-0.5">
+                  {saldoRkmSummary.totalKkBelumLunas} KK Belum Selesai
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabel Rekapitulasi Saldo Kas RKM per RT & Total RW */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <Building className="w-4 h-4 text-emerald-700" />
+                  <span>Tabel Rekapitulasi Saldo Kas RKM per Wilayah RT (RW 018)</span>
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Perhitungan iuran Rp 10.000 / KK / bulan & santunan duka kematian Rp 1.500.000 / jiwa.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportModalInitialRt('ALL');
+                    setIsReportModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Rekapitulasi Lengkap</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <th className="p-3 text-center w-8">No</th>
+                    <th className="p-3">Wilayah</th>
+                    <th className="p-3">Petugas Kolektor RT</th>
+                    <th className="p-3 text-center">KK</th>
+                    <th className="p-3 text-center">Lunas</th>
+                    <th className="p-3 text-center">Tunggak</th>
+                    <th className="p-3 text-right">Penerimaan (Rp)</th>
+                    <th className="p-3 text-right">Santunan (Rp)</th>
+                    <th className="p-3 text-center">Wafat</th>
+                    <th className="p-3 text-right">Saldo Bersih</th>
+                    <th className="p-3 text-center">Tingkat Tertib</th>
+                    <th className="p-3 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {saldoRkmSummary.perRt
+                    .filter((r) => selectedRt === 'ALL' || r.rt === selectedRt)
+                    .map((r, idx) => (
+                      <tr key={r.rt} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 text-center font-bold text-slate-500">{idx + 1}</td>
+                        <td className="p-3 font-black text-slate-900 whitespace-nowrap">
+                          {r.namaRt}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-800">{r.namaPetugas}</div>
+                          <div className="text-[10px] text-slate-500">{r.noHpPetugas || r.jabatanPetugas}</div>
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-700">{r.totalKk}</td>
+                        <td className="p-3 text-center font-bold text-emerald-700">{r.totalKkLunas}</td>
+                        <td className="p-3 text-center font-bold text-amber-700">{r.totalKkBelumLunas}</td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-800 whitespace-nowrap">
+                          {formatRupiah(r.totalPenerimaanIuran)}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold text-rose-800 whitespace-nowrap">
+                          {formatRupiah(r.totalSantunanDisalurkan)}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-700">{r.totalWargaMeninggal}</td>
+                        <td className="p-3 text-right font-mono font-black text-teal-950 whitespace-nowrap bg-teal-50/40">
+                          {formatRupiah(r.saldoBersih)}
+                        </td>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            r.saldoBersih >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {r.persentaseLunas}% Lunas
+                          </span>
+                        </td>
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReportModalInitialRt(r.rt);
+                              setIsReportModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-300 transition-colors shadow-2xs inline-flex items-center gap-1 cursor-pointer"
+                            title={`Cetak Laporan Saldo ${r.namaRt}`}
+                          >
+                            <Printer className="w-3 h-3 text-emerald-700" />
+                            <span>Cetak RT</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+
+                  {/* Total Baris RW 018 */}
+                  <tr className="bg-emerald-50/90 font-black text-slate-900 border-t-2 border-emerald-700">
+                    <td colSpan={3} className="p-3.5 text-center uppercase tracking-wider text-emerald-950">
+                      TOTAL KONSOLIDASI RW 018
+                    </td>
+                    <td className="p-3.5 text-center font-bold text-slate-900">{saldoRkmSummary.totalKk} KK</td>
+                    <td className="p-3.5 text-center text-emerald-800 font-bold">{saldoRkmSummary.totalKkLunas} KK</td>
+                    <td className="p-3.5 text-center text-amber-800 font-bold">{saldoRkmSummary.totalKkBelumLunas} KK</td>
+                    <td className="p-3.5 text-right font-mono text-emerald-900 text-sm whitespace-nowrap">
+                      {formatRupiah(saldoRkmSummary.totalPenerimaanIuran)}
+                    </td>
+                    <td className="p-3.5 text-right font-mono text-rose-900 text-sm whitespace-nowrap">
+                      {formatRupiah(saldoRkmSummary.totalSantunanDisalurkan)}
+                    </td>
+                    <td className="p-3.5 text-center font-bold text-slate-900">{saldoRkmSummary.totalWargaMeninggal} Jiwa</td>
+                    <td className="p-3.5 text-right font-mono text-teal-950 text-sm font-black whitespace-nowrap bg-teal-100/70">
+                      {formatRupiah(saldoRkmSummary.totalSaldoBersih)}
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-700 text-white">
+                        {saldoRkmSummary.persentaseLunas}% Tertib
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReportModalInitialRt('ALL');
+                          setIsReportModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-black rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Printer className="w-3 h-3 text-amber-300" />
+                        <span>Cetak RW</span>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Cards Breakdown per RT */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Kartu Rincian Saldo Kas Tiap RT (Wilayah Kerja RW 018)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {saldoRkmSummary.perRt.map((r) => (
+                <div
+                  key={r.rt}
+                  className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-emerald-400 transition-all shadow-xs flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-800 text-white">
+                          {r.namaRt}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          {r.totalKkLunas} / {r.totalKk} KK Lunas ({r.persentaseLunas}%)
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        r.saldoBersih >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {r.saldoBersih >= 0 ? 'Surplus' : 'Defisit'}
+                      </span>
+                    </div>
+
+                    {/* Collector Info */}
+                    <div className="mt-2.5 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase">Petugas Kolektor:</span>
+                        <span className="font-bold text-slate-800">{r.namaPetugas}</span>
+                      </div>
+                      {r.noHpPetugas && (
+                        <a
+                          href={`https://wa.me/${r.noHpPetugas.replace(/[^0-9]/g, '').replace(/^0/, '62')}?text=Assalamu'alaikum%20${encodeURIComponent(r.namaPetugas)}%2C%20koordinasi%20saldo%20RKM%20RT%20${r.rt}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>WhatsApp</span>
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Progress Bar KK Lunas */}
+                    <div className="mt-3">
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-emerald-600 h-2 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, r.persentaseLunas)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Rincian Finansial RT */}
+                    <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 text-center">
+                      <div className="p-2 rounded-xl bg-slate-50">
+                        <span className="text-[9px] text-slate-400 block uppercase">Penerimaan</span>
+                        <span className="text-xs font-bold text-emerald-800 font-mono">
+                          {formatRupiah(r.totalPenerimaanIuran)}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-50">
+                        <span className="text-[9px] text-slate-400 block uppercase">Santunan</span>
+                        <span className="text-xs font-bold text-rose-800 font-mono">
+                          {formatRupiah(r.totalSantunanDisalurkan)}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-teal-50 border border-teal-200">
+                        <span className="text-[9px] text-teal-800 block uppercase font-bold">Saldo Bersih</span>
+                        <span className="text-xs font-black text-teal-950 font-mono">
+                          {formatRupiah(r.saldoBersih)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReportModalInitialRt(r.rt);
+                        setIsReportModalOpen(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Cetak Laporan RT {r.rt}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRt(r.rt);
+                        setActiveSubTab('iuran');
+                      }}
+                      className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+                    >
+                      Rincian KK
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Rincian Santunan Duka Kematian Terbaru */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <HeartHandshake className="w-4 h-4 text-rose-600" />
+                  <span>Riwayat Penyaluran Santunan Duka Kematian</span>
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Data realisasi santunan kematian Rp 1.500.000 kepada ahli waris warga RW 018.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('meninggal')}
+                className="text-xs font-bold text-emerald-700 hover:underline"
+              >
+                Lihat Semua ({wargaMeninggalList.length})
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <th className="p-2.5 text-center w-8">No</th>
+                    <th className="p-2.5">Nama Almarhum/ah</th>
+                    <th className="p-2.5 text-center">RT</th>
+                    <th className="p-2.5">Tanggal Wafat</th>
+                    <th className="p-2.5">Lokasi Pemakaman</th>
+                    <th className="p-2.5">Ahli Waris Penerima</th>
+                    <th className="p-2.5 text-right">Santunan Duka</th>
+                    <th className="p-2.5 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {wargaMeninggalList.slice(0, 5).map((m, idx) => (
+                    <tr key={m.id} className="hover:bg-slate-50">
+                      <td className="p-2.5 text-center font-bold text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 font-bold text-slate-900">
+                        {m.nama}
+                        <span className="block text-[10px] font-normal text-slate-400">NIK: {m.nik}</span>
+                      </td>
+                      <td className="p-2.5 text-center font-bold text-slate-700">RT {m.rt}</td>
+                      <td className="p-2.5 text-slate-600 whitespace-nowrap">
+                        {formatTanggalIndo(m.tanggalMeninggal)}
+                      </td>
+                      <td className="p-2.5 text-slate-600">{m.lokasiPemakaman}</td>
+                      <td className="p-2.5 text-slate-800">
+                        <div className="font-bold">{m.namaAhliWaris}</div>
+                        <div className="text-[10px] text-slate-400">Hubungan: {m.hubunganWaris}</div>
+                      </td>
+                      <td className="p-2.5 text-right font-mono font-bold text-rose-800 whitespace-nowrap">
+                        {formatRupiah(m.santunanRkm)}
+                      </td>
+                      <td className="p-2.5 text-center whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          {m.statusSantunan}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: FORM PENGELOLAAN KARTU IURAN RKM 12 BULAN */}
+      {isIuranModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-6 flex flex-col max-h-[94vh]">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-teal-900 via-emerald-800 to-teal-900 p-4 sm:px-6 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-300/30 flex items-center justify-center text-amber-300 shrink-0">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
+                    <span>{editingIuran ? 'Kelola & Edit Kartu Iuran RKM 12 Bulan' : 'Input Kartu Iuran RKM 12 Bulan Baru'}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400 text-emerald-950">
+                      Tahun {iuranForm.tahun || 2026}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-emerald-200">
+                    Rukun Kematian Masyarakat (RKM) {profile.namaRw} Kelurahan {profile.kelurahan}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsIuranModalOpen(false)}
-                className="p-1.5 rounded-full hover:bg-emerald-700 text-white"
+                className="p-2 rounded-full hover:bg-emerald-700/60 text-white transition-colors cursor-pointer"
+                title="Tutup Modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitIuran} className="p-5 space-y-3 text-xs max-h-[80vh] overflow-y-auto">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Nama Kepala Keluarga *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Eko Purwanto"
-                  value={iuranForm.namaKepala || ''}
-                  onChange={(e) => setIuranForm({ ...iuranForm, namaKepala: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-xl font-bold"
-                />
+            {/* Modal Form Body */}
+            <form onSubmit={handleSubmitIuran} className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+              {/* SECTION 1: DATA IDENTITAS WARGA & REKENING IURAN */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-slate-800 font-bold">
+                    <User className="w-4 h-4 text-emerald-700" />
+                    <span>1. Data Identitas Warga & Rekening Iuran</span>
+                  </div>
+                  
+                  {/* Quick autofill helper from wargaList */}
+                  {wargaList.length > 0 && (
+                    <div className="relative">
+                      <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1 text-[11px] shadow-2xs">
+                        <Search className="w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Cari warga untuk isi otomatis..."
+                          value={wargaSearchQuery}
+                          onChange={(e) => {
+                            setWargaSearchQuery(e.target.value);
+                            setIsWargaDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsWargaDropdownOpen(true)}
+                          className="bg-transparent border-none outline-hidden text-xs w-48 font-medium"
+                        />
+                      </div>
+                      {isWargaDropdownOpen && wargaSearchQuery.length >= 2 && (
+                        <div className="absolute right-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-48 overflow-y-auto p-1 text-xs">
+                          {wargaList
+                            .filter((w) => w.nama.toLowerCase().includes(wargaSearchQuery.toLowerCase()) || w.nik.includes(wargaSearchQuery))
+                            .slice(0, 6)
+                            .map((w) => (
+                              <button
+                                key={w.id}
+                                type="button"
+                                onClick={() => handleSelectResidentFromList(w)}
+                                className="w-full text-left p-2 hover:bg-emerald-50 rounded-xl transition-colors flex flex-col"
+                              >
+                                <span className="font-bold text-slate-800">{w.nama}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">NIK: {w.nik} • RT {w.rt}</span>
+                              </button>
+                            ))}
+                          <button
+                            type="button"
+                            onClick={() => setIsWargaDropdownOpen(false)}
+                            className="w-full text-center py-1 text-[10px] text-slate-400 hover:text-slate-600"
+                          >
+                            Tutup Pencarian
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Form Fields: Data Nama, NIK, RT, Kartu/Rekening */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Data Nama Kepala Keluarga *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Eko Purwanto"
+                      value={iuranForm.namaKepala || ''}
+                      onChange={(e) => setIuranForm({ ...iuranForm, namaKepala: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      NIK (Nomor Induk Kependudukan)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={16}
+                      placeholder="16 Digit NIK"
+                      value={iuranForm.nik || ''}
+                      onChange={(e) => setIuranForm({ ...iuranForm, nik: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono text-slate-800 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Wilayah RT *
+                    </label>
+                    <select
+                      value={iuranForm.rt || '039'}
+                      onChange={(e) => {
+                        const newRt = e.target.value;
+                        const collector = getCollectorByRt(newRt).nama;
+                        setIuranForm({
+                          ...iuranForm,
+                          rt: newRt,
+                          penerima: collector,
+                          noRekening: `RKM-${newRt}-${iuranForm.noKk?.slice(-4) || '0012'}`
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden"
+                    >
+                      <option value="039">RT 039 - Petugas: Zaenal Fanani</option>
+                      <option value="040">RT 040 - Petugas: Epi</option>
+                      <option value="041">RT 041 - Petugas: Etty Herawati</option>
+                      <option value="042">RT 042 - Petugas: Sefrizal</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Kartu / Rekening Iuran 12 Bulan *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: RKM-039-0012"
+                      value={iuranForm.noRekening || ''}
+                      onChange={(e) => setIuranForm({ ...iuranForm, noRekening: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-emerald-800 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Secondary Row: No. KK, Tahun, Petugas Kolektor */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-200">
+                  <div>
+                    <label className="block font-semibold text-slate-600 mb-1">
+                      Nomor Kartu Keluarga (KK)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="16 Digit Nomor KK"
+                      value={iuranForm.noKk || ''}
+                      onChange={(e) => setIuranForm({ ...iuranForm, noKk: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono text-slate-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-600 mb-1">
+                      Tahun Kartu Iuran
+                    </label>
+                    <input
+                      type="number"
+                      value={iuranForm.tahun || 2026}
+                      onChange={(e) => {
+                        const yr = Number(e.target.value) || 2026;
+                        setIuranForm({
+                          ...iuranForm,
+                          tahun: yr,
+                          bulanTahun: String(yr)
+                        });
+                      }}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-600 mb-1">
+                      Petugas / Kolektor Wilayah
+                    </label>
+                    <input
+                      type="text"
+                      value={iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama}
+                      onChange={(e) => setIuranForm({ ...iuranForm, penerima: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-700"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Wilayah RT</label>
-                  <select
-                    value={iuranForm.rt || '039'}
-                    onChange={(e) => {
-                      const newRt = e.target.value;
-                      setIuranForm({
-                        ...iuranForm,
-                        rt: newRt,
-                        penerima: getPetugasPenarikByRt(newRt)
-                      });
-                    }}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-bold"
+              {/* SECTION 2: TABEL KARTU / REKENING IURAN 12 BULAN */}
+              {(() => {
+                const rincian = iuranForm.rincian12Bulan || [];
+                const summary = calculate12BulanSummary(rincian);
+                return (
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1">
+                      <div>
+                        <div className="flex items-center gap-2 text-slate-800 font-bold">
+                          <Layers className="w-4 h-4 text-emerald-700" />
+                          <span>2. Kartu / Rekening Iuran 12 Bulan (Januari – Desember)</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Centang ☑ Bayar pada bulan yang telah lunas. Tanggal bayar dan status akan terisi otomatis.
+                        </p>
+                      </div>
+
+                      {/* Summary Badges */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl flex items-center gap-2">
+                          <span className="text-[10px] text-emerald-700 font-bold uppercase">Lunas:</span>
+                          <span className="font-extrabold text-emerald-900">{summary.lunasCount}/12 Bulan</span>
+                        </div>
+                        <div className="bg-slate-100 border border-slate-200 px-3 py-1 rounded-xl flex items-center gap-2">
+                          <span className="text-[10px] text-slate-600 font-bold uppercase">Terbayar:</span>
+                          <span className="font-extrabold text-slate-800">{formatRupiah(summary.totalTerbayar)}</span>
+                        </div>
+                        {summary.sisaTunggakan > 0 && (
+                          <div className="bg-rose-50 border border-rose-200 px-3 py-1 rounded-xl flex items-center gap-2">
+                            <span className="text-[10px] text-rose-700 font-bold uppercase">Sisa:</span>
+                            <span className="font-extrabold text-rose-900">{formatRupiah(summary.sisaTunggakan)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quick Action Toolbar */}
+                    <div className="bg-slate-100/80 p-2.5 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-slate-600 mr-1">Tindakan Cepat:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkCheckAll(true)}
+                          className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-bold transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        >
+                          ☑ Centang Semua (12 Bulan)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkCheckSemester(1)}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg font-semibold transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        >
+                          ☑ Semester 1 (Jan-Jun)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkCheckSemester(2)}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg font-semibold transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        >
+                          ☑ Semester 2 (Jul-Des)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkCheckAll(false)}
+                          className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg font-semibold transition-all active:scale-95 cursor-pointer shadow-2xs"
+                        >
+                          Kosongkan Centang
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleApplyNominalToAll(10000)}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold transition-all active:scale-95 cursor-pointer shadow-2xs text-xs"
+                        >
+                          Terapkan Rp. 10.000 / Bln
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSetFreeDhuafa}
+                          className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg font-bold transition-all active:scale-95 cursor-pointer shadow-2xs text-xs"
+                        >
+                          Bebas Kas (Dhuafa)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* The 12-Month Table */}
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-white">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                            <tr>
+                              <th className="p-2.5 text-center w-12">No</th>
+                              <th className="p-2.5 w-36">Bulan (Tahun {iuranForm.tahun || 2026})</th>
+                              <th className="p-2.5 text-center w-28">Checkbox ☑ Bayar</th>
+                              <th className="p-2.5 w-36">Nominal (Rp)</th>
+                              <th className="p-2.5 w-36">Tanggal Bayar</th>
+                              <th className="p-2.5">Keterangan / Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {rincian.map((item, idx) => (
+                              <tr
+                                key={item.bulan}
+                                className={`transition-colors ${
+                                  item.bayar
+                                    ? 'bg-emerald-50/50 hover:bg-emerald-50/80'
+                                    : 'hover:bg-slate-50'
+                                }`}
+                              >
+                                {/* Kolom No */}
+                                <td className="p-2.5 text-center font-mono font-bold text-slate-400">
+                                  {item.bulan}
+                                </td>
+
+                                {/* Kolom Bulan */}
+                                <td className="p-2.5">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`w-2 h-2 rounded-full ${
+                                        item.bayar ? 'bg-emerald-600' : 'bg-slate-300'
+                                      }`}
+                                    />
+                                    <span className="font-bold text-slate-800">
+                                      {item.namaBulan}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Checkbox ☑ Bayar */}
+                                <td className="p-2.5 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleMonthPaid(idx)}
+                                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                                      item.bayar
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-300'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-300'
+                                    }`}
+                                  >
+                                    {item.bayar ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                        <span>Lunas</span>
+                                      </>
+                                    ) : (
+                                      <span>Belum</span>
+                                    )}
+                                  </button>
+                                </td>
+
+                                {/* Kolom Nominal */}
+                                <td className="p-2.5">
+                                  <input
+                                    type="number"
+                                    step={5000}
+                                    min={0}
+                                    placeholder="10000"
+                                    value={item.nominal}
+                                    onChange={(e) => handleMonthNominalChange(idx, Number(e.target.value))}
+                                    className="w-full p-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 text-xs focus:border-emerald-600 outline-hidden"
+                                  />
+                                </td>
+
+                                {/* Kolom Tanggal Bayar */}
+                                <td className="p-2.5">
+                                  <input
+                                    type="date"
+                                    value={item.tanggalBayar || ''}
+                                    onChange={(e) => handleMonthTanggalChange(idx, e.target.value)}
+                                    className="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-700 focus:border-emerald-600 outline-hidden"
+                                  />
+                                </td>
+
+                                {/* Kolom Keterangan/Status */}
+                                <td className="p-2.5">
+                                  <select
+                                    value={item.status}
+                                    onChange={(e) => handleMonthStatusChange(idx, e.target.value as any)}
+                                    className={`w-full p-1.5 rounded-lg text-xs font-semibold border ${
+                                      item.status === 'Lunas'
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                        : item.status === 'Bebas Iuran (Dhuafa)'
+                                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                        : 'bg-white border-slate-300 text-slate-700'
+                                    }`}
+                                  >
+                                    <option value="Lunas">Lunas</option>
+                                    <option value="Belum Lunas">Belum Lunas</option>
+                                    <option value="Bebas Iuran (Dhuafa)">Bebas Iuran (Dhuafa)</option>
+                                    <option value="Titip RT">Titip RT</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* SECTION 3: AREA TANDA TANGAN */}
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShieldCheck className="w-4 h-4 text-emerald-800" />
+                  <span className="font-bold text-emerald-950 text-xs">
+                    3. Area Pengesahan & Tanda Tangan Kartu Iuran RKM
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                  {/* Tanda Tangan: Petugas / Kolektor */}
+                  <div className="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-2xs flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold block">Petugas Kolektor Penerima:</span>
+                      <span className="text-xs font-bold text-emerald-900 block mt-0.5">
+                        Petugas / Kolektor RT {iuranForm.rt || '039'}
+                      </span>
+                    </div>
+
+                    <div className="h-16 flex items-center justify-center my-2 border-b border-dashed border-slate-200 text-slate-300 italic text-[11px]">
+                      [ Paraf / Tanda Tangan Petugas ]
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 underline block">
+                        {iuranForm.penerima || getCollectorByRt(iuranForm.rt || '039').nama}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        Ketua RT {iuranForm.rt || '039'} RW 018
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tanda Tangan: Ketua RKM RW 018 */}
+                  <div className="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-2xs flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-semibold block">Mengetahui & Menyetujui:</span>
+                      <span className="text-xs font-bold text-emerald-900 block mt-0.5">
+                        Ketua RKM RW 018
+                      </span>
+                    </div>
+
+                    <div className="h-16 flex items-center justify-center my-2 border-b border-dashed border-slate-200 text-slate-300 italic text-[11px] relative">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                        <div className="w-14 h-14 rounded-full border-2 border-emerald-700 flex items-center justify-center text-[8px] font-bold text-emerald-900 rotate-12">
+                          RKM RW 018
+                        </div>
+                      </div>
+                      [ Tanda Tangan & Cap Stempel ]
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 underline block">
+                        {profile.pengurusRkm?.ketua || 'H. Daryanto'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        Ketua Pengurus RKM {profile.namaRw}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer Actions: Tombol Melihat Kartu, Tombol Cetak Kartu, Batal & Simpan */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleViewCurrentFormCard}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-bold transition-all active:scale-95 cursor-pointer"
                   >
-                    <option value="039">RT 039 (Zaenal Fanani)</option>
-                    <option value="040">RT 040 (Epi)</option>
-                    <option value="041">RT 041 (Etty Herawati)</option>
-                    <option value="042">RT 042 (Sefrizal)</option>
-                  </select>
-                </div>
+                    <Eye className="w-4 h-4" />
+                    <span>Tombol Melihat Kartu Iuran 12 Bulan</span>
+                  </button>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Periode (Bulan-Tahun)</label>
-                  <input
-                    type="month"
-                    value={iuranForm.bulanTahun || '2026-08'}
-                    onChange={(e) => setIuranForm({ ...iuranForm, bulanTahun: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nominal Iuran (Rp)</label>
-                  <input
-                    type="number"
-                    step={5000}
-                    value={iuranForm.nominal || 0}
-                    onChange={(e) => setIuranForm({ ...iuranForm, nominal: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-bold text-emerald-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Status Pembayaran</label>
-                  <select
-                    value={iuranForm.status || 'Lunas'}
-                    onChange={(e) => setIuranForm({ ...iuranForm, status: e.target.value as any })}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-bold"
+                  <button
+                    type="button"
+                    onClick={handleViewCurrentFormCard}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-xl font-bold transition-all active:scale-95 cursor-pointer"
                   >
-                    <option value="Lunas">Lunas</option>
-                    <option value="Belum Lunas">Belum Lunas</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tanggal Bayar</label>
-                  <input
-                    type="date"
-                    value={iuranForm.tanggalBayar || ''}
-                    onChange={(e) => setIuranForm({ ...iuranForm, tanggalBayar: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-xl"
-                  />
+                    <Printer className="w-4 h-4" />
+                    <span>Tombol Cetak Kartu</span>
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Penerima / Kolektor</label>
-                  <input
-                    type="text"
-                    value={iuranForm.penerima || ''}
-                    onChange={(e) => setIuranForm({ ...iuranForm, penerima: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-xl"
-                  />
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsIuranModalOpen(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    Simpan Data Kartu Iuran
+                  </button>
                 </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsIuranModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-700 text-white rounded-xl font-bold"
-                >
-                  Simpan Iuran
-                </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL PRATINJAU & CETAK KARTU IURAN 12 BULAN RESMI */}
+      {isCardModalOpen && (
+        <RkmCardModal
+          record={selectedCardForView}
+          profile={profile}
+          onClose={() => {
+            setIsCardModalOpen(false);
+            setSelectedCardForView(null);
+          }}
+        />
       )}
 
       {/* MODAL 2: FORM WARGA MENINGGAL */}
@@ -1630,6 +2975,19 @@ export const RkmView: React.FC<RkmViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL LAPORAN SALDO RKM PER RT & TOTAL RW 018 (PRINT & EXPORT) */}
+      {isReportModalOpen && (
+        <RkmReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          iuranList={iuranRkmList}
+          meninggalList={wargaMeninggalList}
+          profile={profile}
+          initialRt={reportModalInitialRt}
+          initialTahun={2026}
+        />
       )}
     </div>
   );

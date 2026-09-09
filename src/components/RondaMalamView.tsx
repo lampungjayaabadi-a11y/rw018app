@@ -27,7 +27,13 @@ import {
   CalendarDays,
   Send,
   Eye,
-  Building
+  Building,
+  ShieldAlert,
+  Lock,
+  PlusCircle,
+  ArrowLeft,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 import {
   JadwalRonda,
@@ -67,8 +73,8 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
   onDeleteAbsensi,
   currentUser,
 }) => {
-  // Submenu tabs: 'jadwal' (Jadwal Ronda Senin-Minggu) or 'absensi' (Daftar Hadir & Pengecekan RT/RW)
-  const [activeSubMenu, setActiveSubMenu] = useState<'jadwal' | 'absensi'>('jadwal');
+  // Submenu tabs: 'jadwal' (Jadwal Ronda Senin-Minggu), 'absensi' (Daftar Hadir & Pengecekan RT/RW), or 'input_jadwal' (Input Jadwal Ronda Malam Khusus RW/SA)
+  const [activeSubMenu, setActiveSubMenu] = useState<'jadwal' | 'absensi' | 'input_jadwal'>('jadwal');
 
   // Filters
   const [selectedHari, setSelectedHari] = useState<string>('ALL');
@@ -124,13 +130,33 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
 
   const [wargaSearchInput, setWargaSearchInput] = useState('');
 
-  // Role permissions
-  const isKetuaRw = currentUser?.role === 'admin_rw';
+  // Role permissions & access checks
+  const isSuperAdmin = currentUser ? (
+    currentUser.role === 'admin_rw' ||
+    currentUser.role === 'super_admin' ||
+    currentUser.username.toLowerCase() === 'superadmin' ||
+    currentUser.username.toLowerCase() === 'sa' ||
+    currentUser.username.toLowerCase() === 'admin'
+  ) : false;
+
+  const isKetuaRw = currentUser ? (
+    currentUser.role === 'ketua_rw' ||
+    currentUser.username.toLowerCase() === 'ketuarw' ||
+    (currentUser.nama && currentUser.nama.toLowerCase().includes('eko purwanto')) ||
+    isSuperAdmin
+  ) : false;
+
   const isKetuaRt = currentUser?.role === 'ketua_rt';
   const isKeamanan = currentUser?.role === 'keamanan';
-  const canManage = !currentUser || isKetuaRw || isKetuaRt || isKeamanan;
+  const isWarga = currentUser?.role === 'warga';
+  const isKetuaRwOrSa = isKetuaRw || isSuperAdmin || !currentUser;
 
-  // Filtered Jadwal
+  // Strict user permission rule:
+  // - Super Admin / SA and Ketua RW can manage schedules and have the Input Jadwal Ronda Malam menu
+  // - Warga can ONLY VIEW schedules, cannot add or delete
+  const canManage = !isWarga && (isSuperAdmin || isKetuaRw || isKetuaRt || isKeamanan || !currentUser);
+
+  // Filtered Jadwal (Penemuan Jadwal Ronda Super Admin / SA & Umum)
   const filteredJadwal = useMemo(() => {
     return jadwalList.filter((j) => {
       const matchHari = selectedHari === 'ALL' || j.hari === selectedHari;
@@ -139,9 +165,19 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
       const matchSearch =
         !q ||
         j.namaGrup.toLowerCase().includes(q) ||
+        j.hari.toLowerCase().includes(q) ||
+        j.rt.toLowerCase().includes(q) ||
+        `rt ${j.rt}`.toLowerCase().includes(q) ||
         j.ketuaGrup.nama.toLowerCase().includes(q) ||
+        (j.ketuaGrup.nik && j.ketuaGrup.nik.includes(q)) ||
+        (j.ketuaGrup.alamat && j.ketuaGrup.alamat.toLowerCase().includes(q)) ||
         j.posKamling.toLowerCase().includes(q) ||
-        j.anggota.some((a) => a.nama.toLowerCase().includes(q));
+        (j.keterangan && j.keterangan.toLowerCase().includes(q)) ||
+        j.anggota.some((a) =>
+          a.nama.toLowerCase().includes(q) ||
+          (a.nik && a.nik.includes(q)) ||
+          (a.alamat && a.alamat.toLowerCase().includes(q))
+        );
       return matchHari && matchRt && matchSearch;
     }).sort((a, b) => {
       return HARI_ORDER.indexOf(a.hari) - HARI_ORDER.indexOf(b.hari);
@@ -204,8 +240,12 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
       .sort((a, b) => a.nama.localeCompare(b.nama));
   }, [wargaList, jadwalForm.rt]);
 
-  // Open Modal Add Jadwal
-  const handleOpenAddJadwal = () => {
+  // Open Add Jadwal
+  const handleOpenAddJadwal = (openModal = false) => {
+    if (isWarga) {
+      alert('Akses Dibatasi: User login warga hanya dapat melihat jadwal ronda dan tidak dapat menambah data.');
+      return;
+    }
     setEditingJadwal(null);
     const defaultRt = currentUser?.role === 'ketua_rt' && currentUser.rtAccess ? currentUser.rtAccess : '039';
     setJadwalForm({
@@ -222,11 +262,18 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
       anggotaList: [],
       keterangan: 'Keliling lingkungan berkala setiap jam, cek portal masuk, bawa senter dan kentongan.',
     });
-    setIsJadwalModalOpen(true);
+    setWargaSearchInput('');
+    if (openModal) {
+      setIsJadwalModalOpen(true);
+    }
   };
 
-  // Open Modal Edit Jadwal
+  // Open Edit Jadwal
   const handleOpenEditJadwal = (item: JadwalRonda) => {
+    if (isWarga) {
+      alert('Akses Dibatasi: User login warga hanya dapat melihat jadwal ronda dan tidak dapat mengubah data.');
+      return;
+    }
     setEditingJadwal(item);
     setJadwalForm({
       hari: item.hari,
@@ -242,7 +289,12 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
       anggotaList: [...(item.anggota || [])],
       keterangan: item.keterangan || '',
     });
-    setIsJadwalModalOpen(true);
+    setWargaSearchInput('');
+    if (isKetuaRwOrSa) {
+      setActiveSubMenu('input_jadwal');
+    } else {
+      setIsJadwalModalOpen(true);
+    }
   };
 
   // Handle select Ketua Grup from Warga dropdown
@@ -292,6 +344,10 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
   // Save Jadwal
   const handleSaveJadwalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWarga) {
+      alert('Akses Dibatasi: User login warga tidak dapat menambah atau mengubah jadwal ronda.');
+      return;
+    }
     if (!jadwalForm.namaGrup || !jadwalForm.ketuaGrupNama) {
       alert('Nama Regu dan Ketua Grup Ronda wajib diisi!');
       return;
@@ -320,10 +376,20 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
 
     onSaveJadwal(item);
     setIsJadwalModalOpen(false);
+    if (activeSubMenu === 'input_jadwal') {
+      setSelectedHari(item.hari);
+      setSelectedRt('ALL');
+      setActiveSubMenu('jadwal');
+    }
+    alert(`Jadwal ronda ${item.namaGrup} (${item.hari} - RT ${item.rt}) berhasil disimpan!`);
   };
 
   // Start Presensi from a Schedule
   const handleStartPresensiFromJadwal = (jadwal: JadwalRonda) => {
+    if (isWarga) {
+      alert('Akses Dibatasi: User login warga hanya dapat melihat jadwal ronda dan tidak dapat mencatat presensi.');
+      return;
+    }
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -406,6 +472,10 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
   // Save Absensi Submit
   const handleSaveAbsensiSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isWarga) {
+      alert('Akses Dibatasi: User login warga hanya dapat melihat data presensi dan tidak dapat mengubahnya.');
+      return;
+    }
     if (!activeAbsensiRecord) return;
     onSaveAbsensi(activeAbsensiRecord);
     setSelectedAbsensiId(activeAbsensiRecord.id);
@@ -415,6 +485,10 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
 
   // Quick Verifikasi oleh Ketua RT
   const handleVerifikasiRt = (record: AbsensiRondaRecord) => {
+    if (isWarga) {
+      alert('Akses Dibatasi: Verifikasi presensi hanya dapat dilakukan oleh Ketua RT.');
+      return;
+    }
     const updated: AbsensiRondaRecord = {
       ...record,
       diperiksaOlehRt: currentUser?.nama || `Ketua RT ${record.rt}`,
@@ -425,6 +499,10 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
 
   // Quick Verifikasi oleh Ketua RW
   const handleVerifikasiRw = (record: AbsensiRondaRecord) => {
+    if (isWarga) {
+      alert('Akses Dibatasi: Verifikasi presensi hanya dapat dilakukan oleh Ketua RW.');
+      return;
+    }
     const updated: AbsensiRondaRecord = {
       ...record,
       diperiksaOlehRw: `${profile.namaKetuaRw}`,
@@ -459,16 +537,28 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-start sm:self-center">
-            {canManage && (
+            {isKetuaRwOrSa ? (
               <button
                 id="btn-tambah-jadwal-ronda"
-                onClick={handleOpenAddJadwal}
+                onClick={() => {
+                  handleOpenAddJadwal(false);
+                  setActiveSubMenu('input_jadwal');
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Input Jadwal Ronda Malam</span>
+              </button>
+            ) : canManage ? (
+              <button
+                id="btn-tambah-jadwal-ronda"
+                onClick={() => handleOpenAddJadwal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Input Regu Ronda</span>
               </button>
-            )}
+            ) : null}
 
             <button
               id="btn-cetak-jadwal-ronda"
@@ -511,6 +601,81 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
         </div>
       </div>
 
+      {/* KHUSUS USER LOGIN KETUA RW / SUPER ADMIN (SA): FITUR PENJADWALAN & INPUT JADWAL RONDA */}
+      {isKetuaRwOrSa && !isWarga && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-slate-50 p-4 rounded-3xl border border-amber-300 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-xs shrink-0">
+              <PlusCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-2xs">
+                  {isSuperAdmin ? 'Akses Super Admin (SA)' : currentUser ? 'Akses Ketua RW' : 'Akses Ketua RW / SA'}
+                </span>
+                <span className="text-xs font-black text-slate-900">
+                  Menu Input Jadwal Ronda Malam Aktif
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Sebagai <strong>{isSuperAdmin ? 'Super Admin (SA)' : currentUser ? 'Ketua RW' : 'Ketua RW / SA'}</strong>, Anda memiliki hak wewenang untuk menambah, menyusun regu, dan menginput jadwal ronda malam (Senin s/d Minggu) untuk RT 039 s/d RT 042.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                handleOpenAddJadwal(false);
+                setActiveSubMenu('input_jadwal');
+              }}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Input Jadwal Baru</span>
+            </button>
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-amber-300 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500">Total Jadwal:</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900">
+                {filteredJadwal.length} Jadwal
+              </span>
+            </div>
+
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                Reset Cari
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* KHUSUS USER LOGIN WARGA: PEMBERITAHUAN HANYA BISA MELIHAT DATA */}
+      {isWarga && (
+        <div className="bg-blue-50/90 p-4 rounded-3xl border border-blue-200 shadow-xs flex items-start gap-3.5 text-xs text-blue-900">
+          <div className="w-9 h-9 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 border border-blue-200">
+            <Eye className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-200 text-blue-950">
+                Akses Warga (Hanya Lihat)
+              </span>
+              <span className="font-black text-blue-950">
+                Jadwal Ronda Malam Lingkungan RW 018
+              </span>
+            </div>
+            <p className="text-[11px] text-blue-800/90 leading-relaxed">
+              Anda masuk sebagai <strong>Warga ({currentUser?.nama})</strong>. Sesuai ketentuan hak akses, akun warga hanya dapat <strong>melihat jadwal ronda dan personil jaga</strong> dan tidak memiliki izin untuk menambah, mengubah, atau menghapus jadwal ronda.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Navigasi Sub Menu Ronda Malam */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
@@ -547,38 +712,70 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
               </span>
             )}
           </button>
+
+          {/* MENU INPUT JADWAL RONDA MALAM (KHUSUS USER LOGIN KETUA RW / SA) */}
+          {isKetuaRwOrSa && (
+            <button
+              id="subtab-input-jadwal-ronda"
+              onClick={() => {
+                if (activeSubMenu !== 'input_jadwal') {
+                  handleOpenAddJadwal(false);
+                }
+                setActiveSubMenu('input_jadwal');
+              }}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubMenu === 'input_jadwal'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-amber-900 bg-amber-100/70 hover:bg-amber-200/90 border border-amber-300/80'
+              }`}
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-amber-950" />
+              <span>Input Jadwal Ronda Malam</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-400 text-slate-950 border border-amber-500/40">
+                RW / SA
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Filter Bar */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Filter RT */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-500">Filter RT:</span>
-            <select
-              value={selectedRt}
-              onChange={(e) => setSelectedRt(e.target.value)}
-              className="p-1.5 bg-slate-100 rounded-xl font-bold text-slate-700 border-none text-xs"
-            >
-              <option value="ALL">Semua RT (039 - 042)</option>
-              <option value="039">RT 039 (Zaenal Fanani)</option>
-              <option value="040">RT 040 (Epi)</option>
-              <option value="041">RT 041 (Etty Herawati)</option>
-              <option value="042">RT 042 (Sefrizal)</option>
-            </select>
-          </div>
+        {activeSubMenu !== 'input_jadwal' ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Filter RT */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-500">Filter RT:</span>
+              <select
+                value={selectedRt}
+                onChange={(e) => setSelectedRt(e.target.value)}
+                className="p-1.5 bg-slate-100 rounded-xl font-bold text-slate-700 border-none text-xs"
+              >
+                <option value="ALL">Semua RT (039 - 042)</option>
+                <option value="039">RT 039 (Zaenal Fanani)</option>
+                <option value="040">RT 040 (Epi)</option>
+                <option value="041">RT 041 (Etty Herawati)</option>
+                <option value="042">RT 042 (Sefrizal)</option>
+              </select>
+            </div>
 
-          {/* Quick Search */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Cari nama warga / regu..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1 bg-slate-100 rounded-xl text-xs text-slate-800 placeholder-slate-400 border-none focus:ring-1 focus:ring-blue-500 w-44"
-            />
+            {/* Quick Search */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari nama warga / regu..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1 bg-slate-100 rounded-xl text-xs text-slate-800 placeholder-slate-400 border-none focus:ring-1 focus:ring-blue-500 w-44"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-xl text-[11px] font-black bg-amber-50 text-amber-900 border border-amber-200">
+              Formulir Input Jadwal Khusus Ketua RW / SA
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -631,11 +828,14 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
               </p>
               {canManage && (
                 <button
-                  onClick={handleOpenAddJadwal}
-                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5"
+                  onClick={() => {
+                    handleOpenAddJadwal(false);
+                    setActiveSubMenu('input_jadwal');
+                  }}
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Input Regu Ronda Baru</span>
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Input Jadwal Ronda Malam</span>
                 </button>
               )}
             </div>
@@ -770,13 +970,20 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
 
                     {/* Card Actions */}
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => handleStartPresensiFromJadwal(jadwal)}
-                        className="flex-1 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Catat Presensi Malam Ini</span>
-                      </button>
+                      {canManage ? (
+                        <button
+                          onClick={() => handleStartPresensiFromJadwal(jadwal)}
+                          className="flex-1 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Catat Presensi Malam Ini</span>
+                        </button>
+                      ) : (
+                        <div className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Personil: {1 + (jadwal.anggota?.length || 0)} Warga (Mode Lihat)</span>
+                        </div>
+                      )}
 
                       {canManage && (
                         <div className="flex items-center gap-1">
@@ -803,6 +1010,445 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAMPILAN 3: MENU INPUT JADWAL RONDA MALAM (KHUSUS KETUA RW / SA)          */}
+      {/* ========================================================================= */}
+      {activeSubMenu === 'input_jadwal' && (
+        !isKetuaRwOrSa ? (
+          <div className="p-8 max-w-xl mx-auto text-center bg-white rounded-3xl border border-rose-200 shadow-xs my-6 space-y-4">
+            <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-200 tracking-wider">
+                Akses Dibatasi
+              </span>
+              <h2 className="text-lg font-black text-slate-900">
+                Menu Khusus Ketua RW & Super Admin (SA)
+              </h2>
+              <p className="text-slate-600 text-xs leading-relaxed max-w-md mx-auto">
+                Menu input dan penjadwalan ronda malam ini hanya dapat diakses oleh akun <strong>Ketua RW dan Super Admin (SA)</strong>. Akun warga hanya memiliki akses untuk melihat jadwal.
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveSubMenu('jadwal')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Kembali ke Jadwal Ronda</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Header Form Input Jadwal Ronda */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 rounded-3xl shadow-sm border border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-xs">
+                    <PlusCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                        Menu Input Jadwal Ronda Malam
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-200 border border-blue-400/30">
+                        Akses Ketua RW / SA
+                      </span>
+                      {editingJadwal && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white">
+                          Mode Edit: {editingJadwal.namaGrup}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                      {editingJadwal ? `Edit Jadwal: ${editingJadwal.namaGrup}` : 'Input Jadwal Ronda Malam Lingkungan RW 018'}
+                    </h2>
+                    <p className="text-xs text-blue-200 mt-1 max-w-2xl leading-relaxed">
+                      Penyusunan jadwal giliran jaga pos kamling wilayah RT 039 s/d RT 042 (Senin s/d Minggu, Pukul 23:00 - 04:00 WIB). Tentukan ketua regu dan personil warga langsung dari data kependudukan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubMenu('jadwal')}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition border border-slate-700 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Lihat Jadwal Ronda</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Formulir Input Jadwal */}
+            <form onSubmit={handleSaveJadwalSubmit} className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+              {/* SECTION 1: PILIH HARI (SENIN - MINGGU) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-amber-500" />
+                    Pilih Hari Penugasan Ronda (Senin s/d Minggu) *
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Hari Terpilih: <strong className="text-amber-600 font-black">{jadwalForm.hari}</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                  {HARI_ORDER.map((hari) => {
+                    const isSelected = jadwalForm.hari === hari;
+                    return (
+                      <button
+                        key={hari}
+                        type="button"
+                        onClick={() => setJadwalForm({ ...jadwalForm, hari })}
+                        className={`py-2.5 px-3 rounded-2xl font-black text-xs transition-all flex flex-col items-center justify-center cursor-pointer border ${
+                          isSelected
+                            ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-xs ring-2 ring-amber-400/40'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="text-sm">{hari}</span>
+                        <span className="text-[10px] font-medium opacity-75">
+                          {hari === 'Sabtu' || hari === 'Minggu' ? 'Akhir Pekan' : 'Hari Kerja'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2: PILIH WILAYAH RT */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                    <Building className="w-4 h-4 text-blue-600" />
+                    Pilih Wilayah RT (RT 039 s/d RT 042) *
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Wilayah Terpilih: <strong className="text-blue-700 font-black">RT {jadwalForm.rt}</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {['039', '040', '041', '042'].map((rtVal) => {
+                    const isSelected = jadwalForm.rt === rtVal;
+                    const rtNama = rtVal === '039' ? 'Zaenal Fanani' : rtVal === '040' ? 'Epi' : rtVal === '041' ? 'Etty Herawati' : 'Sefrizal';
+                    return (
+                      <button
+                        key={rtVal}
+                        type="button"
+                        onClick={() => {
+                          setJadwalForm({
+                            ...jadwalForm,
+                            rt: rtVal,
+                            posKamling: `Pos Ronda RT ${rtVal} (Jl. Pala)`,
+                            ketuaGrupNama: '',
+                            ketuaGrupNik: '',
+                            ketuaGrupNoHp: '',
+                            ketuaGrupAlamat: '',
+                            anggotaList: [],
+                          });
+                        }}
+                        className={`p-3 rounded-2xl text-left font-bold text-xs transition-all border cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs ring-2 ring-slate-900/20'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-sm">RT {rtVal}</span>
+                          {isSelected && <Check className="w-4 h-4 text-amber-400" />}
+                        </div>
+                        <span className="text-[11px] opacity-80 block truncate mt-1">
+                          Ketua: {rtNama}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 3: NAMA REGU, POS KAMLING, DAN JAM TUGAS (23:00 - 04:00) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1 text-xs">
+                    Nama Regu Ronda *
+                  </label>
+                  <input
+                    type="text"
+                    value={jadwalForm.namaGrup}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, namaGrup: e.target.value })}
+                    placeholder={`Contoh: Regu 1 (${jadwalForm.hari} RT ${jadwalForm.rt})`}
+                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-bold text-slate-800 text-xs focus:ring-2 focus:ring-amber-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1 text-xs">
+                    Lokasi Pos Kamling *
+                  </label>
+                  <input
+                    type="text"
+                    value={jadwalForm.posKamling}
+                    onChange={(e) => setJadwalForm({ ...jadwalForm, posKamling: e.target.value })}
+                    placeholder={`Pos Ronda RT ${jadwalForm.rt} (Jl. Pala)`}
+                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-bold text-slate-800 text-xs focus:ring-2 focus:ring-amber-400"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1 text-xs">
+                    Jam Ronda (Wajib: 23:00 - 04:00) *
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={jadwalForm.jamMulai}
+                      onChange={(e) => setJadwalForm({ ...jadwalForm, jamMulai: e.target.value })}
+                      placeholder="23:00"
+                      className="w-1/2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono font-bold text-center text-slate-800 text-xs"
+                      required
+                    />
+                    <span className="font-bold text-slate-400 text-xs">s/d</span>
+                    <input
+                      type="text"
+                      value={jadwalForm.jamSelesai}
+                      onChange={(e) => setJadwalForm({ ...jadwalForm, jamSelesai: e.target.value })}
+                      placeholder="04:00"
+                      className="w-1/2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono font-bold text-center text-slate-800 text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: KETUA GRUP RONDA (DARI DATA WARGA RT) */}
+              <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label className="font-black text-amber-950 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    Pilih Ketua Grup Ronda dari Data Warga RT {jadwalForm.rt} *
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-bold">
+                    Tersedia {wargaPilihanByRt.length} Warga Terdaftar di RT {jadwalForm.rt}
+                  </span>
+                </div>
+
+                {/* Dropdown pilih warga terdaftar */}
+                <select
+                  onChange={(e) => handleSelectKetuaWarga(e.target.value)}
+                  defaultValue=""
+                  className="w-full p-2.5 bg-white rounded-xl border border-amber-300 font-bold text-slate-800 text-xs focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="" disabled>
+                    -- Klik untuk Memilih Ketua Regu dari Warga RT {jadwalForm.rt} --
+                  </option>
+                  {wargaPilihanByRt.map((w) => (
+                    <option key={w.id} value={w.nik}>
+                      {w.nama} (NIK: {w.nik} • {w.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan'} • {w.pekerjaan || 'Warga'})
+                    </option>
+                  ))}
+                </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="font-bold text-amber-900 block mb-1 text-xs">
+                      Nama Lengkap Ketua Regu *
+                    </label>
+                    <input
+                      type="text"
+                      value={jadwalForm.ketuaGrupNama}
+                      onChange={(e) => setJadwalForm({ ...jadwalForm, ketuaGrupNama: e.target.value })}
+                      placeholder="Nama Ketua Regu"
+                      className="w-full p-2 bg-white rounded-xl border border-amber-200 font-bold text-slate-800 text-xs"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-amber-900 block mb-1 text-xs">
+                      No. WhatsApp / HP Aktif Ketua *
+                    </label>
+                    <input
+                      type="text"
+                      value={jadwalForm.ketuaGrupNoHp}
+                      onChange={(e) => setJadwalForm({ ...jadwalForm, ketuaGrupNoHp: e.target.value })}
+                      placeholder="0812-xxxx-xxxx"
+                      className="w-full p-2 bg-white rounded-xl border border-amber-200 font-mono text-slate-800 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {jadwalForm.ketuaGrupAlamat && (
+                  <div className="text-[11px] text-amber-900/80 flex items-center gap-1.5 bg-white/70 px-3 py-1.5 rounded-lg border border-amber-200/60">
+                    <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>Domisili: {jadwalForm.ketuaGrupAlamat}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 5: ANGGOTA REGU RONDA DARI WARGA RT */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-slate-700" />
+                    Personil Anggota Ronda RT {jadwalForm.rt}
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                    {jadwalForm.anggotaList.length} Personil Terdaftar
+                  </span>
+                </div>
+
+                {/* List Anggota Terpilih */}
+                {jadwalForm.anggotaList.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {jadwalForm.anggotaList.map((a, idx) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="font-bold text-slate-800 text-xs truncate flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-700 text-[10px] flex items-center justify-center font-black">
+                              {idx + 1}
+                            </span>
+                            {a.nama}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono truncate">
+                            NIK: {a.nik || '-'} {a.noHp ? `• ${a.noHp}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAnggota(a.id)}
+                          className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition cursor-pointer"
+                          title="Hapus dari daftar anggota"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-white p-3 rounded-xl border border-dashed border-slate-200 text-center">
+                    Belum ada anggota regu ditambahkan. Tambahkan warga RT {jadwalForm.rt} di bawah ini.
+                  </p>
+                )}
+
+                {/* Pilih & Tambah Warga RT */}
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-600 mb-1.5">
+                    Pilih & Tambah Warga Terdaftar RT {jadwalForm.rt} ke Regu Ronda:
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder={`Cari warga RT ${jadwalForm.rt}...`}
+                        value={wargaSearchInput}
+                        onChange={(e) => setWargaSearchInput(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                    {wargaPilihanByRt
+                      .filter((w) => !wargaSearchInput || w.nama.toLowerCase().includes(wargaSearchInput.toLowerCase()) || w.nik.includes(wargaSearchInput))
+                      .map((w) => {
+                        const isAlreadyAdded = jadwalForm.anggotaList.some((a) => a.nik === w.nik || a.nama === w.nama);
+                        const isKetua = jadwalForm.ketuaGrupNik === w.nik || jadwalForm.ketuaGrupNama === w.nama;
+                        return (
+                          <div
+                            key={w.id}
+                            className={`flex items-center justify-between p-2 rounded-xl text-xs transition border ${
+                              isAlreadyAdded || isKetua
+                                ? 'bg-slate-100/70 border-slate-200 text-slate-400'
+                                : 'bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 text-slate-700'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <span className="font-bold text-slate-800 block truncate">
+                                {w.nama}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                NIK: {w.nik} • {w.pekerjaan || 'Warga'} • {w.noHp || 'No HP -'}
+                              </span>
+                            </div>
+                            {isKetua ? (
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-lg shrink-0">
+                                Ketua Regu
+                              </span>
+                            ) : isAlreadyAdded ? (
+                              <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg shrink-0">
+                                Sudah Ditambah
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAddAnggotaWarga(w)}
+                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shrink-0 transition cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Tambah
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 6: CATATAN & SOP RONDA MALAM */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 text-xs">
+                  Instruksi Khusus & Catatan SOP Pos Ronda RW 018
+                </label>
+                <textarea
+                  value={jadwalForm.keterangan}
+                  onChange={(e) => setJadwalForm({ ...jadwalForm, keterangan: e.target.value })}
+                  rows={2}
+                  placeholder="Contoh: Patroli keliling lingkungan setiap 1 jam, koordinasi via WhatsApp/HT, periksa portal lingkungan, bawa senter dan perlengkapan jaga."
+                  className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-200">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddJadwal(false)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Formulir</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubMenu('jadwal')}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    Batal & Kembali
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  id="btn-simpan-jadwal-ronda-malam"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingJadwal ? 'Simpan Perubahan Jadwal Ronda' : 'Simpan Jadwal Ronda Malam'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )
       )}
 
       {/* ========================================================================= */}
@@ -1860,6 +2506,10 @@ export const RondaMalamView: React.FC<RondaMalamViewProps> = ({
               </button>
               <button
                 onClick={() => {
+                  if (isWarga) {
+                    alert('Akses Dibatasi: User login warga tidak dapat menghapus jadwal ronda.');
+                    return;
+                  }
                   onDeleteJadwal(deleteJadwalConfirm.id);
                   setDeleteJadwalConfirm(null);
                 }}

@@ -26,7 +26,9 @@ import {
   ChevronDown,
   RefreshCw,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  ArrowDownAZ,
+  ArrowUpZA
 } from 'lucide-react';
 import { KartuKeluarga, Warga, BansosItem, EconomicStatus, RWProfile, AppUser } from '../types';
 import { generateId, formatTanggalIndo, hitungUsia } from '../utils/formatters';
@@ -147,6 +149,7 @@ export const KkView: React.FC<KkViewProps> = ({
   const [selectedRt, setSelectedRt] = useState<string>(restrictedRt || 'ALL');
   const [selectedEkonomi, setSelectedEkonomi] = useState<string>('ALL');
   const [selectedDesil, setSelectedDesil] = useState<string>('ALL');
+  const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
 
   // Sync selected RT when login role changes
   useEffect(() => {
@@ -188,7 +191,7 @@ export const KkView: React.FC<KkViewProps> = ({
 
   // Filtered list
   const filteredKK = useMemo(() => {
-    return scopedKkList.filter((k) => {
+    const list = scopedKkList.filter((k) => {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -217,7 +220,14 @@ export const KkView: React.FC<KkViewProps> = ({
 
       return matchSearch && matchRt && matchEkonomi && matchDesil;
     });
-  }, [scopedKkList, searchQuery, selectedRt, restrictedRt, selectedEkonomi, selectedDesil]);
+
+    if (sortOrder === 'asc') {
+      return [...list].sort((a, b) => a.kepalaKeluarga.localeCompare(b.kepalaKeluarga, 'id', { sensitivity: 'base' }));
+    } else if (sortOrder === 'desc') {
+      return [...list].sort((a, b) => b.kepalaKeluarga.localeCompare(a.kepalaKeluarga, 'id', { sensitivity: 'base' }));
+    }
+    return list;
+  }, [scopedKkList, searchQuery, selectedRt, restrictedRt, selectedEkonomi, selectedDesil, sortOrder]);
 
   const handleOpenAdd = () => {
     setEditingKK(null);
@@ -488,6 +498,62 @@ export const KkView: React.FC<KkViewProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Tombol Kecil Pengurutan Nama Kepala Keluarga A-Z */}
+            <button
+              id="sort-kk-az-btn"
+              type="button"
+              onClick={() => {
+                setSortOrder((prev) => (prev === 'default' ? 'asc' : prev === 'asc' ? 'desc' : 'default'));
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer active:scale-95 ${
+                sortOrder === 'asc'
+                  ? 'bg-blue-700 text-white border-blue-800 shadow-xs ring-2 ring-blue-600/30'
+                  : sortOrder === 'desc'
+                  ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/30'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+              title={
+                sortOrder === 'asc'
+                  ? 'Data KK sedang diurutkan nama Kepala Keluarga A-Z. Klik untuk urut Z-A'
+                  : sortOrder === 'desc'
+                  ? 'Data KK sedang diurutkan nama Kepala Keluarga Z-A. Klik untuk urutan awal'
+                  : 'Urutkan data KK berdasarkan nama Kepala Keluarga A-Z'
+              }
+            >
+              {sortOrder === 'desc' ? (
+                <ArrowUpZA className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <ArrowDownAZ className={`w-3.5 h-3.5 ${sortOrder === 'asc' ? 'text-white' : 'text-blue-700'}`} />
+              )}
+              <span>
+                {sortOrder === 'asc'
+                  ? 'Nama A-Z'
+                  : sortOrder === 'desc'
+                  ? 'Nama Z-A'
+                  : 'Urut Nama A-Z'}
+              </span>
+              {sortOrder !== 'default' && (
+                <span className="bg-white/20 text-white text-[9px] px-1 py-0.2 rounded font-black">
+                  Aktif
+                </span>
+              )}
+            </button>
+
+            {(selectedEkonomi !== 'ALL' || selectedDesil !== 'ALL' || sortOrder !== 'default') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEkonomi('ALL');
+                  setSelectedDesil('ALL');
+                  setSortOrder('default');
+                }}
+                className="px-2 py-1 text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg shrink-0 transition-colors cursor-pointer"
+                title="Reset Semua Sub-Filter & Urutan"
+              >
+                ✕ Reset Filter
+              </button>
+            )}
           </div>
         </div>
 
@@ -511,6 +577,33 @@ export const KkView: React.FC<KkViewProps> = ({
               </button>
             )}
           </div>
+
+          {/* Active Sort Notification Bar */}
+          {sortOrder !== 'default' && (
+            <div className="mt-2 p-2 bg-blue-50 rounded-xl border border-blue-200 flex items-center justify-between gap-2 text-xs text-blue-950 animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 font-bold">
+                {sortOrder === 'asc' ? (
+                  <ArrowDownAZ className="w-4 h-4 text-blue-700 shrink-0" />
+                ) : (
+                  <ArrowUpZA className="w-4 h-4 text-amber-700 shrink-0" />
+                )}
+                <span>
+                  Urutan Kartu Keluarga: <strong>{sortOrder === 'asc' ? 'Kepala Keluarga A s/d Z (Menaik)' : 'Kepala Keluarga Z s/d A (Menurun)'}</strong>
+                </span>
+                <span className="px-1.5 py-0.2 rounded bg-blue-700 text-white text-[10px] font-black">
+                  {filteredKK.length} KK
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSortOrder('default')}
+                className="text-[11px] font-bold text-blue-800 hover:text-blue-950 underline px-1 cursor-pointer"
+                title="Kembalikan ke urutan awal pendaftaran"
+              >
+                Reset Urutan
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

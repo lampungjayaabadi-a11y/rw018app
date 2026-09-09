@@ -309,6 +309,12 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="truncate">
                     {profile.kelurahan || 'Melayu'}, {profile.kotaKab || 'Banjarmasin'}
                   </span>
+                  {currentUser && (
+                    <span className="hidden sm:inline-flex items-center gap-1 text-white font-bold ml-1.5 pl-1.5 border-l border-emerald-600/70 text-[10px]">
+                      <span className="text-amber-300 font-extrabold">User Aktif:</span>
+                      <span className="truncate max-w-[140px] text-emerald-100">{currentUser.nama}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -389,11 +395,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   id="btn-header-user-menu"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-emerald-800/90 hover:bg-emerald-700/90 active:bg-emerald-900 border border-emerald-600/60 shadow-xs transition-all active:scale-95"
-                  title="Menu Pengguna & Pengaturan"
+                  className="flex items-center gap-2 px-2 sm:px-2.5 py-1 rounded-xl bg-emerald-800/90 hover:bg-emerald-700/90 active:bg-emerald-900 border border-emerald-600/70 shadow-xs transition-all active:scale-95 cursor-pointer"
+                  title={`User Aktif: ${currentUser.nama} (${currentUser.roleLabel})`}
                   aria-label="Buka Menu Akun"
                 >
-                  <div className="w-6 h-6 rounded-full overflow-hidden border border-amber-300/80 bg-slate-900 flex items-center justify-center font-black text-[11px] shadow-2xs shrink-0">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden border-2 border-amber-300/90 bg-slate-900 flex items-center justify-center font-black text-[11px] shadow-2xs shrink-0">
                     <img
                       src={getUserPhotoUrl(currentUser, currentUser.nama)}
                       alt={currentUser.nama}
@@ -405,16 +411,22 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                     />
                   </div>
-                  <span className="hidden md:inline text-xs font-semibold max-w-[80px] truncate text-white">
-                    {currentUser.nama.split(' ')[0]}
-                  </span>
-                  <ChevronDown className="w-3 h-3 text-emerald-300" />
+                  <div className="flex flex-col text-left leading-tight max-w-[90px] sm:max-w-[150px] md:max-w-[200px]">
+                    <span className="text-[8px] sm:text-[9px] text-amber-300 font-extrabold uppercase tracking-wider flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                      <span>User Aktif</span>
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-black truncate text-white" title={currentUser.nama}>
+                      {currentUser.nama}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-emerald-300 shrink-0 ml-0.5" />
                 </button>
               ) : (
                 <button
                   id="btn-header-login"
                   onClick={onOpenLogin}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-bold transition-all shadow-md active:scale-95"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-emerald-950 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Login</span>
@@ -430,9 +442,9 @@ export const Header: React.FC<HeaderProps> = ({
                   />
                   <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 text-slate-800 dark:text-slate-100 p-2.5 text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in slide-in-from-top-2 duration-150">
                     {/* User Info Card */}
-                    <div className="p-2 space-y-1 bg-gradient-to-br from-emerald-50 to-slate-50 dark:from-slate-800 dark:to-emerald-950/40 rounded-xl border border-emerald-100 dark:border-slate-700/80 mb-1.5">
+                    <div className="p-2.5 space-y-1 bg-gradient-to-br from-emerald-50 to-slate-50 dark:from-slate-800 dark:to-emerald-950/40 rounded-xl border border-emerald-100 dark:border-slate-700/80 mb-1.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-emerald-600 dark:border-emerald-400 bg-slate-900 flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+                        <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-emerald-600 dark:border-emerald-400 bg-slate-900 flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
                           <img
                             src={getUserPhotoUrl(currentUser, currentUser.nama)}
                             alt={currentUser.nama}
@@ -445,10 +457,14 @@ export const Header: React.FC<HeaderProps> = ({
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                          <div className="text-[9px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                            <span>User Aktif</span>
+                          </div>
+                          <div className="font-extrabold text-slate-900 dark:text-white text-xs sm:text-sm truncate">
                             {currentUser.nama}
                           </div>
-                          <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1">
+                          <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1 mt-0.5">
                             <span>{currentUser.roleLabel}</span>
                             {currentUser.rtAccess && currentUser.rtAccess !== 'ALL' && (
                               <span className="bg-emerald-200/80 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 px-1 rounded text-[9px]">
@@ -456,6 +472,11 @@ export const Header: React.FC<HeaderProps> = ({
                               </span>
                             )}
                           </div>
+                          {currentUser.wargaNik && (
+                            <div className="text-[10px] text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                              NIK: <strong>{currentUser.wargaNik}</strong>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono pt-1">

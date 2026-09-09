@@ -42,7 +42,9 @@ import {
   Printer,
   Mic,
   MicOff,
-  Volume2
+  Volume2,
+  ArrowDownAZ,
+  ArrowUpZA
 } from 'lucide-react';
 import { Warga, KartuKeluarga, Gender, Religion, MaritalStatus, FamilyRole, BloodType, RWProfile, AppUser } from '../types';
 import { formatTanggalIndo, hitungUsia, getCleanWaNumber, generateId } from '../utils/formatters';
@@ -100,6 +102,7 @@ export const WargaView: React.FC<WargaViewProps> = ({
   const [filterDudaJanda, setFilterDudaJanda] = useState<boolean>(false);
   const [filterUsiaProduktif, setFilterUsiaProduktif] = useState<boolean>(false);
   const [filterAnakYatim, setFilterAnakYatim] = useState<boolean>(false);
+  const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
   const [isSpecialDropdownOpen, setIsSpecialDropdownOpen] = useState<boolean>(false);
   const [isSpecialReportModalOpen, setIsSpecialReportModalOpen] = useState<boolean>(false);
   const [reportInitialCategory, setReportInitialCategory] = useState<SpecialCategoryTab>('ALL_SPECIAL');
@@ -185,6 +188,8 @@ export const WargaView: React.FC<WargaViewProps> = ({
 
   // Web Speech API State for Voice Search
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [speechTranscript, setSpeechTranscript] = useState<string>('');
+  const [isSpeakingFeedback, setIsSpeakingFeedback] = useState<boolean>(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -194,38 +199,86 @@ export const WargaView: React.FC<WargaViewProps> = ({
     );
   }, []);
 
+  // Helper to clean voice transcripts for accurate resident name searching
+  const cleanVoiceTranscript = (text: string): string => {
+    if (!text) return '';
+    let cleaned = text.trim();
+    // Strip common Indonesian voice search prefixes (e.g. "cari nama Bambang", "nama Budi", "cari warga Siti", "pak Joko", "bu Ani")
+    cleaned = cleaned.replace(/^(tolong\s+)?(cari\s+nama\s+warga|cari\s+nama|cari\s+warga|cari|nama\s+warga|nama|warga|pak|bu|bapak|ibu|lihat)\s+/i, '');
+    // Strip trailing/leading punctuation marks (. , ! ? ;) that speech recognition engines auto-append
+    cleaned = cleaned.replace(/^[.,;:!?\s]+|[.,;:!?\s]+$/g, '');
+    cleaned = cleaned.replace(/[.,;:!?]/g, ' ');
+    // Normalize consecutive whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    return cleaned;
+  };
+
+  // Text-to-Speech feedback via Web Speech Synthesis API
+  const speakResults = (message: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.lang = 'id-ID';
+        utterance.rate = 1.0;
+        utterance.onstart = () => setIsSpeakingFeedback(true);
+        utterance.onend = () => setIsSpeakingFeedback(false);
+        utterance.onerror = () => setIsSpeakingFeedback(false);
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('SpeechSynthesis error:', err);
+        setIsSpeakingFeedback(false);
+      }
+    }
+  };
+
+  const handleStopVoiceInput = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.warn('Error stopping recognition:', err);
+      }
+    }
+    setIsListening(false);
+  };
+
   const handleToggleVoiceInput = () => {
     if (!isSpeechSupported) {
-      alert('Browser ini belum mendukung Web Speech API (Input Suara). Silakan gunakan Google Chrome di Android atau Desktop.');
+      setSpeechError('Peramban ini belum mendukung Web Speech API (Input Suara). Silakan gunakan Google Chrome di Android/Desktop, Microsoft Edge, atau Safari.');
       return;
     }
 
     if (isListening) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (err) {
-          console.warn('Error stopping recognition:', err);
-        }
-      }
-      setIsListening(false);
+      handleStopVoiceInput();
       return;
     }
 
     try {
+      // Abort any previous zombie instance
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // ignore
+        }
+        recognitionRef.current = null;
+      }
+
       const SpeechRecognitionClass =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognitionClass();
       recognitionRef.current = recognition;
 
-      recognition.lang = 'id-ID'; // Bahasa Indonesia untuk pengenalan nama warga yang akurat
+      recognition.lang = 'id-ID'; // Bahasa Indonesia untuk akurasi pengenalan nama warga lokal
       recognition.continuous = false;
       recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
+      recognition.maxAlternatives = 3;
 
       recognition.onstart = () => {
         setIsListening(true);
         setSpeechError(null);
+        setSpeechTranscript('');
       };
 
       recognition.onresult = (event: any) => {
@@ -241,25 +294,31 @@ export const WargaView: React.FC<WargaViewProps> = ({
           }
         }
 
-        const recognizedText = (finalTranscript || interimTranscript).trim();
-        if (recognizedText) {
-          onSearchChange(recognizedText);
+        const rawText = (finalTranscript || interimTranscript).trim();
+        if (rawText) {
+          setSpeechTranscript(rawText);
+          const cleanedText = cleanVoiceTranscript(rawText);
+          if (cleanedText) {
+            onSearchChange(cleanedText);
+          }
         }
       };
 
       recognition.onerror = (event: any) => {
         console.warn('Web Speech API Error:', event.error);
         if (event.error === 'not-allowed') {
-          setSpeechError('Izin mikrofon tidak diberikan. Silakan izinkan akses mikrofon pada peramban Anda.');
+          setSpeechError('Izin mikrofon belum diberikan atau diblokir peramban. Silakan klik ikon gembok/mikrofon di bilah alamat peramban untuk mengizinkan, atau buka di Tab Baru.');
         } else if (event.error === 'no-speech') {
-          setSpeechError('Suara tidak terdeteksi. Silakan coba sebutkan kembali nama warga.');
+          setSpeechError('Suara tidak terdeteksi. Silakan klik mikrofon dan sebutkan nama warga kembali.');
         } else if (event.error === 'audio-capture') {
-          setSpeechError('Mikrofon tidak terdeteksi pada perangkat.');
-        } else {
+          setSpeechError('Mikrofon tidak terdeteksi pada perangkat Anda.');
+        } else if (event.error === 'network') {
+          setSpeechError('Layanan pengenalan suara tidak dapat terhubung. Pastikan koneksi internet aktif.');
+        } else if (event.error !== 'aborted') {
           setSpeechError(`Pencarian suara: ${event.error}`);
         }
         setIsListening(false);
-        setTimeout(() => setSpeechError(null), 5000);
+        setTimeout(() => setSpeechError(null), 7000);
       };
 
       recognition.onend = () => {
@@ -282,6 +341,14 @@ export const WargaView: React.FC<WargaViewProps> = ({
         try {
           recognitionRef.current.abort();
         } catch (e) {
+          // ignore
+        }
+        recognitionRef.current = null;
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
           // ignore
         }
       }
@@ -527,9 +594,12 @@ export const WargaView: React.FC<WargaViewProps> = ({
 
   // Filtered Warga List (strictly uses scopedWargaList)
   const filteredWarga = useMemo(() => {
-    return scopedWargaList.filter((w) => {
+    const list = scopedWargaList.filter((w) => {
       // Search
-      const q = searchQuery.toLowerCase().trim();
+      const rawQ = searchQuery.toLowerCase().trim();
+      const q = rawQ.replace(/^[.,;:!?\s]+|[.,;:!?\s]+$/g, '');
+      const words = q.split(/\s+/).filter(Boolean);
+
       const matchSearch =
         !q ||
         w.nama.toLowerCase().includes(q) ||
@@ -537,7 +607,16 @@ export const WargaView: React.FC<WargaViewProps> = ({
         w.noKk.includes(q) ||
         w.pekerjaan.toLowerCase().includes(q) ||
         w.alamat.toLowerCase().includes(q) ||
-        w.rt.includes(q);
+        w.rt.includes(q) ||
+        (words.length > 1 &&
+          words.every(
+            (word) =>
+              w.nama.toLowerCase().includes(word) ||
+              w.alamat.toLowerCase().includes(word) ||
+              w.pekerjaan.toLowerCase().includes(word) ||
+              w.rt.includes(word) ||
+              w.nik.includes(word)
+          ));
 
       // RT filter
       const matchRt =
@@ -563,7 +642,14 @@ export const WargaView: React.FC<WargaViewProps> = ({
 
       return matchSearch && matchRt && matchGender && matchLansia && matchDisabilitas && matchDudaJanda && matchUsiaProduktif && matchAnakYatim;
     });
-  }, [scopedWargaList, searchQuery, selectedRt, restrictedRt, filterGender, filterLansia, filterDisabilitas, filterDudaJanda, filterUsiaProduktif, filterAnakYatim, wargaList, kkList]);
+
+    if (sortOrder === 'asc') {
+      return [...list].sort((a, b) => a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' }));
+    } else if (sortOrder === 'desc') {
+      return [...list].sort((a, b) => b.nama.localeCompare(a.nama, 'id', { sensitivity: 'base' }));
+    }
+    return list;
+  }, [scopedWargaList, searchQuery, selectedRt, restrictedRt, filterGender, filterLansia, filterDisabilitas, filterDudaJanda, filterUsiaProduktif, filterAnakYatim, wargaList, kkList, sortOrder]);
 
   const handleOpenAdd = () => {
     setEditingWarga(null);
@@ -1161,7 +1247,48 @@ export const WargaView: React.FC<WargaViewProps> = ({
               )}
             </div>
 
-            {(filterGender !== 'ALL' || filterLansia || filterDisabilitas || filterDudaJanda || filterUsiaProduktif || filterAnakYatim) && (
+            {/* Tombol Kecil Pengurutan Nama Warga A-Z */}
+            <button
+              id="sort-warga-az-btn"
+              type="button"
+              onClick={() => {
+                setSortOrder((prev) => (prev === 'default' ? 'asc' : prev === 'asc' ? 'desc' : 'default'));
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer active:scale-95 ${
+                sortOrder === 'asc'
+                  ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs ring-2 ring-emerald-600/30'
+                  : sortOrder === 'desc'
+                  ? 'bg-amber-700 text-white border-amber-800 shadow-xs ring-2 ring-amber-600/30'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+              title={
+                sortOrder === 'asc'
+                  ? 'Data warga sedang diurutkan nama A-Z. Klik untuk urut Z-A'
+                  : sortOrder === 'desc'
+                  ? 'Data warga sedang diurutkan nama Z-A. Klik untuk urutan awal'
+                  : 'Urutkan data nama warga A-Z'
+              }
+            >
+              {sortOrder === 'desc' ? (
+                <ArrowUpZA className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <ArrowDownAZ className={`w-3.5 h-3.5 ${sortOrder === 'asc' ? 'text-white' : 'text-emerald-700'}`} />
+              )}
+              <span>
+                {sortOrder === 'asc'
+                  ? 'Nama A-Z'
+                  : sortOrder === 'desc'
+                  ? 'Nama Z-A'
+                  : 'Urut Nama A-Z'}
+              </span>
+              {sortOrder !== 'default' && (
+                <span className="bg-white/20 text-white text-[9px] px-1 py-0.2 rounded font-black">
+                  Aktif
+                </span>
+              )}
+            </button>
+
+            {(filterGender !== 'ALL' || filterLansia || filterDisabilitas || filterDudaJanda || filterUsiaProduktif || filterAnakYatim || sortOrder !== 'default') && (
               <button
                 type="button"
                 onClick={() => {
@@ -1171,9 +1298,10 @@ export const WargaView: React.FC<WargaViewProps> = ({
                   setFilterDudaJanda(false);
                   setFilterUsiaProduktif(false);
                   setFilterAnakYatim(false);
+                  setSortOrder('default');
                 }}
                 className="px-2 py-1 text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg shrink-0 transition-colors cursor-pointer"
-                title="Reset Semua Sub-Filter"
+                title="Reset Semua Sub-Filter & Urutan"
               >
                 ✕ Reset Filter
               </button>
@@ -1186,6 +1314,7 @@ export const WargaView: React.FC<WargaViewProps> = ({
           <div className="relative flex items-center">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-700 pointer-events-none" />
             <input
+              id="warga-search-input"
               type="text"
               placeholder="Pencarian Nama Warga, NIK (16 digit), atau No KK..."
               value={searchQuery}
@@ -1201,8 +1330,12 @@ export const WargaView: React.FC<WargaViewProps> = ({
             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
               {searchQuery && (
                 <button
+                  id="clear-search-btn"
                   type="button"
-                  onClick={() => onSearchChange('')}
+                  onClick={() => {
+                    onSearchChange('');
+                    setSpeechTranscript('');
+                  }}
                   className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/70 rounded-full transition-colors cursor-pointer text-xs"
                   title="Hapus pencarian"
                 >
@@ -1212,17 +1345,18 @@ export const WargaView: React.FC<WargaViewProps> = ({
 
               {/* Web Speech API Microphone Button */}
               <button
+                id="mic-search-btn"
                 type="button"
                 onClick={handleToggleVoiceInput}
                 className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center ${
                   isListening
                     ? 'bg-rose-600 text-white shadow-md ring-2 ring-rose-300 animate-pulse scale-105'
-                    : 'text-emerald-700 hover:text-emerald-900 bg-emerald-100/70 hover:bg-emerald-200/90 border border-emerald-300/60'
+                    : 'text-emerald-700 hover:text-emerald-900 bg-emerald-100/80 hover:bg-emerald-200/90 border border-emerald-300/70'
                 }`}
                 title={
                   isListening
-                    ? 'Sedang mendengarkan suara... Klik untuk berhenti'
-                    : 'Pencarian dengan Suara (Web Speech API) - Sebutkan nama warga'
+                    ? 'Sedang mendengarkan suara... Klik untuk menyelesaikan'
+                    : 'Cari Warga via Suara (Web Speech API) - Sebutkan nama warga'
                 }
               >
                 {isListening ? (
@@ -1234,61 +1368,170 @@ export const WargaView: React.FC<WargaViewProps> = ({
             </div>
           </div>
 
-          {/* Live Voice Search Listening Notification */}
+          {/* Quick Voice Search Pill & Example Suggestions (When Idle) */}
+          {!isListening && !searchQuery.trim() && (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <button
+                  id="quick-voice-search-btn"
+                  type="button"
+                  onClick={handleToggleVoiceInput}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-semibold transition-colors cursor-pointer"
+                >
+                  <Mic className="w-3 h-3 text-emerald-700" />
+                  <span>Cari Nama via Suara</span>
+                </button>
+                <span className="text-slate-400 hidden sm:inline">•</span>
+                <span className="text-slate-500 hidden sm:inline">Ucapkan nama warga langsung untuk memfilter</span>
+              </div>
+              {scopedWargaList.length > 0 && (
+                <div className="hidden md:flex items-center gap-1 text-[10px] text-slate-400">
+                  <span>Contoh:</span>
+                  {scopedWargaList.slice(0, 3).map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => onSearchChange(w.nama.split(' ')[0])}
+                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
+                    >
+                      &quot;{w.nama.split(' ')[0]}&quot;
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Live Voice Search Listening Notification & Audio Visualizer */}
           {isListening && (
-            <div className="mt-2 p-2.5 bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 rounded-2xl border border-rose-200 flex items-center justify-between gap-2 text-xs text-rose-950 animate-in fade-in slide-in-from-top-1 duration-150">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
-                </span>
+            <div className="mt-2 p-3 bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 rounded-2xl border border-rose-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-rose-950 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="flex items-center gap-2.5">
+                {/* Simulated Audio Equalizer Bars */}
+                <div className="flex items-end gap-1 h-5 w-6 shrink-0 py-0.5">
+                  <span className="w-1 bg-rose-500 rounded-full animate-[bounce_0.6s_infinite_100ms] h-3"></span>
+                  <span className="w-1 bg-rose-600 rounded-full animate-[bounce_0.6s_infinite_250ms] h-5"></span>
+                  <span className="w-1 bg-rose-500 rounded-full animate-[bounce_0.6s_infinite_400ms] h-2"></span>
+                  <span className="w-1 bg-rose-600 rounded-full animate-[bounce_0.6s_infinite_180ms] h-4"></span>
+                </div>
                 <div>
-                  <span className="font-bold text-rose-800">Mendengarkan Suara (Bahasa Indonesia)...</span>
-                  <span className="text-slate-600 ml-1 block sm:inline text-[11px]">
-                    Sebutkan nama warga yang ingin dicari (contoh: &quot;Bambang&quot;, &quot;Siti&quot;, dsb).
-                  </span>
+                  <div className="flex items-center gap-1.5 font-bold text-rose-900">
+                    <span>Mendengarkan Suara (Bahasa Indonesia)...</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700/90 mt-0.5">
+                    {speechTranscript ? (
+                      <span>
+                        Mendengar: <strong className="font-bold text-rose-950">&quot;{speechTranscript}&quot;</strong>
+                      </span>
+                    ) : (
+                      <span>Sebutkan nama warga yang ingin dicari (contoh: &quot;Bambang&quot;, &quot;Siti&quot;, dsb)...</span>
+                    )}
+                  </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleToggleVoiceInput}
-                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
-              >
-                Selesai
-              </button>
+              <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                <button
+                  id="stop-voice-search-btn"
+                  type="button"
+                  onClick={handleStopVoiceInput}
+                  className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  Selesai
+                </button>
+                <button
+                  id="cancel-voice-search-btn"
+                  type="button"
+                  onClick={() => {
+                    handleStopVoiceInput();
+                    onSearchChange('');
+                    setSpeechTranscript('');
+                  }}
+                  className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
             </div>
           )}
 
           {/* Speech Error Banner */}
           {speechError && (
-            <div className="mt-2 p-2 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between gap-2 text-xs text-amber-900">
+            <div className="mt-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between gap-2 text-xs text-amber-900">
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>{speechError}</span>
+                <span className="leading-tight">{speechError}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSpeechError(null)}
-                className="text-amber-700 hover:text-amber-900 text-xs font-bold px-1"
+                className="text-amber-700 hover:text-amber-900 text-xs font-bold px-1 cursor-pointer"
+                title="Tutup pesan error"
               >
                 ✕
               </button>
             </div>
           )}
 
-          {/* Search Result Feedback Indicator */}
+          {/* Search Result Feedback Indicator with Text-To-Speech Playback */}
           {searchQuery.trim() && !isListening && (
-            <div className="mt-2 p-2 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-950">
-              <div className="flex items-center gap-1.5 font-bold">
+            <div className="mt-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-950">
+              <div className="flex items-center gap-2 font-bold flex-wrap">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Hasil Pencarian: &quot;{searchQuery}&quot;</span>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-700 text-white text-[10px]">
                   {filteredWarga.length} Data Ditemukan
                 </span>
+                {/* Web Speech API: Text-to-Speech announce button */}
+                <button
+                  id="speech-synthesis-btn"
+                  type="button"
+                  onClick={() => {
+                    const count = filteredWarga.length;
+                    const message = count > 0
+                      ? `Ditemukan ${count} data warga untuk pencarian ${searchQuery}.`
+                      : `Tidak ditemukan data warga untuk pencarian ${searchQuery}.`;
+                    speakResults(message);
+                  }}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                    isSpeakingFeedback
+                      ? 'bg-emerald-700 text-white border-emerald-800 animate-pulse'
+                      : 'bg-white hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}
+                  title="Dengarkan pembacaan hasil suara (Web Speech Synthesis)"
+                >
+                  <Volume2 className="w-3 h-3 text-emerald-700" />
+                  <span>{isSpeakingFeedback ? 'Membaca...' : 'Dengarkan'}</span>
+                </button>
               </div>
               <span className="text-[11px] text-emerald-800 font-medium">
                 💡 Menampilkan <strong>No KK</strong> dan <strong>Nama Kepala Keluarga</strong> pada setiap data
               </span>
+            </div>
+          )}
+
+          {/* Active Sort Notification Bar */}
+          {sortOrder !== 'default' && (
+            <div className="mt-2 p-2 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between gap-2 text-xs text-emerald-950 animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 font-bold">
+                {sortOrder === 'asc' ? (
+                  <ArrowDownAZ className="w-4 h-4 text-emerald-700 shrink-0" />
+                ) : (
+                  <ArrowUpZA className="w-4 h-4 text-amber-700 shrink-0" />
+                )}
+                <span>
+                  Urutan Nama Warga: <strong>{sortOrder === 'asc' ? 'A s/d Z (Menaik)' : 'Z s/d A (Menurun)'}</strong>
+                </span>
+                <span className="px-1.5 py-0.2 rounded bg-emerald-700 text-white text-[10px] font-black">
+                  {filteredWarga.length} Jiwa
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSortOrder('default')}
+                className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline px-1 cursor-pointer"
+                title="Kembalikan ke urutan awal pendaftaran"
+              >
+                Reset Urutan
+              </button>
             </div>
           )}
         </div>

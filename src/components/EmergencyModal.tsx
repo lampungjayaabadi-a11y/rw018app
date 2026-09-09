@@ -142,7 +142,7 @@ export const EmergencyModal: React.FC<EmergencyModalProps> = ({
     // 2. Aparat Wilayah & Keamanan RW
     {
       id: 'aparat-bhabin',
-      nama: 'Aiptu Evodius',
+      nama: 'Aipda Evodius (NRP. 84050233)',
       instansi: 'Bhabinkamtibmas Polsek Metro (Pembina Keamanan RW 018)',
       kategori: 'aparat',
       kategoriLabel: 'Aparat Wilayah',

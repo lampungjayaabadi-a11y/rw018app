@@ -56,7 +56,8 @@ import {
   Printer,
   Compass,
   Map,
-  Navigation
+  Navigation,
+  Smartphone
 } from 'lucide-react';
 import {
   Warga,
@@ -105,6 +106,7 @@ interface DashboardViewProps {
   onOpenNewWarga?: () => void;
   onOpenNewKas?: () => void;
   onOpenDatabaseModal?: () => void;
+  onOpenAndroidModal?: () => void;
   onOpenLogin?: () => void;
 }
 
@@ -131,6 +133,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenNewWarga,
   onOpenNewKas,
   onOpenDatabaseModal,
+  onOpenAndroidModal,
   onOpenLogin,
 }) => {
   const [copiedAnnouncement, setCopiedAnnouncement] = useState(false);
@@ -462,6 +465,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <Megaphone className="w-3.5 h-3.5 text-amber-300" />
                 <span>Kanal Aspirasi Lingkungan</span>
+              </button>
+            )}
+
+            {onOpenAndroidModal && (
+              <button
+                onClick={onOpenAndroidModal}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-300 text-xs font-bold border border-amber-400/40 shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="Pasang Aplikasi Android & PWA RW 018"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-amber-300" />
+                <span>Pasang Aplikasi Android</span>
               </button>
             )}
           </div>

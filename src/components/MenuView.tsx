@@ -72,6 +72,7 @@ interface MenuViewProps {
     kegiatan: number;
     pengaduan: number;
     surat: number;
+    laporanKejadian?: number;
   };
 }
 
@@ -95,7 +96,7 @@ export const MenuView: React.FC<MenuViewProps> = ({
     {
       id: 'kd-1',
       namaInstansi: 'Bhabinkamtibmas',
-      petugas: 'Aiptu Evodius',
+      petugas: 'Aipda Evodius (NRP. 84050233)',
       nomorTelepon: '081379712721',
       kategori: 'Keamanan Polisi'
     },
@@ -241,6 +242,14 @@ export const MenuView: React.FC<MenuViewProps> = ({
           icon: ShieldCheck,
           count: 'Senin-Minggu • 23:00-04:00',
           color: 'bg-amber-50 text-amber-900 border-amber-300',
+        },
+        {
+          id: 'laporan_kejadian' as NavTab,
+          label: 'Laporan Kejadian RW 018',
+          desc: 'Form data digital resmi laporan insiden/musibah wilayah kepada Lurah, Camat, Kapolsek, kronologi AI & cetak PDF',
+          icon: FileText,
+          count: counts.laporanKejadian !== undefined ? `${counts.laporanKejadian} Laporan` : 'Laporan Resmi',
+          color: 'bg-rose-50 text-rose-800 border-rose-300',
         },
         {
           id: 'kegiatan' as NavTab,
