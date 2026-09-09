@@ -2,6 +2,7 @@ import { AppUser, RolePermission, UserRole, NavTab } from '../types';
 import { initialUsers, ROLE_PERMISSIONS } from '../data/initialUsers';
 import { safeStorage } from '../utils/safeStorage';
 import { getRtLogo, RT_LOGOS, LOGO_RW_018 } from '../constants/logo';
+import { getWargaList } from './storage';
 import {
   saveDocumentOnline,
   deleteDocumentOnline,
@@ -111,8 +112,8 @@ export function getUsersList(): AppUser[] {
         (iu) => iu.username.toLowerCase() === (u.username || '').toLowerCase() || iu.id === u.id
       );
 
-      // Restore default nama if missing, empty, or old placeholder names
-      if (defaultUser) {
+      // Restore default nama if missing, empty, or old placeholder names (skip if user is citizen/warga with custom resident name)
+      if (defaultUser && defaultUser.role !== 'warga') {
         if (
           !updatedUser.nama ||
           updatedUser.nama.trim() === '' ||
@@ -257,6 +258,10 @@ export function getCurrentUser(): AppUser | null {
       return null;
     }
     const user = JSON.parse(raw) as AppUser;
+    // For citizen user with verified name and NIK, return directly to preserve their identity
+    if (user.role === 'warga' && user.nama) {
+      return user;
+    }
     // Verify user still exists in users list
     const allUsers = getUsersList();
     const existing = allUsers.find((u) => u.id === user.id);
@@ -298,22 +303,74 @@ export function loginUser(username: string, password?: string): { success: boole
     return { success: false, message: 'Akun ini sedang dinonaktifkan oleh Administrator RW.' };
   }
 
-  // If user role is 'warga', allow instant login without password requirement
-  if (foundUser.role === 'warga') {
-    // Warga does not require password verification
-  } else {
-    // Password check for admins and officers: ONLY verify against the exact registered password
-    const inputPass = (password || '').trim();
-    if (!inputPass) {
-      return { success: false, message: 'Silakan masukkan kata sandi Anda.' };
+  // If user role is 'warga', NIK verification is mandatory from Data Induk Warga
+  if (foundUser.role === 'warga' || trimmedUser === 'warga') {
+    const inputNik = (password || '').trim();
+    if (!inputNik) {
+      return {
+        success: false,
+        message: 'Wajib memasukkan password yaitu NIK warga terdaftar di data induk warga.',
+      };
     }
 
-    // Strict validation: only the exact registered password (foundUser.password) is valid
-    const isValid = foundUser.password === inputPass;
+    const cleanNik = inputNik.replace(/\s+/g, '');
+    const digitsOnly = cleanNik.replace(/\D/g, '');
+    const wargaList = getWargaList();
+    const matchedWarga = wargaList.find(
+      (w) =>
+        w.nik.trim() === cleanNik ||
+        (digitsOnly.length >= 10 && w.nik.replace(/\D/g, '') === digitsOnly)
+    );
 
-    if (!isValid) {
-      return { success: false, message: 'Kata sandi salah. Hanya bisa masuk dengan kata sandi terdaftar yang benar.' };
+    if (!matchedWarga) {
+      return {
+        success: false,
+        message: 'Anda Bukan warga RW 018',
+      };
     }
+
+    // Citizen verified! Create resident session with their exact name and NIK
+    const citizenUser: AppUser = {
+      ...foundUser,
+      id: `usr-warga-${matchedWarga.nik}`,
+      username: 'warga',
+      password: matchedWarga.nik,
+      nama: matchedWarga.nama,
+      role: 'warga',
+      roleLabel: `Warga (RT ${matchedWarga.rt})`,
+      rtAccess: matchedWarga.rt,
+      noHp: matchedWarga.noHp || '',
+      wargaNik: matchedWarga.nik,
+      avatarUrl:
+        matchedWarga.foto ||
+        matchedWarga.fotoUrl ||
+        getUserPhotoUrl(null, matchedWarga.nama),
+      isActive: true,
+      lastLogin: new Date().toISOString(),
+      description: `Warga RW 018 terdaftar (RT ${matchedWarga.rt}, No KK: ${matchedWarga.noKk})`,
+    };
+
+    const updatedUsers = users.map((u) =>
+      u.role === 'warga' || u.username === 'warga' ? citizenUser : u
+    );
+    saveUsersListLocally(updatedUsers);
+    saveDocumentOnline('users', citizenUser.id, citizenUser);
+    setCurrentUser(citizenUser);
+
+    return { success: true, user: citizenUser };
+  }
+
+  // Password check for admins and officers: ONLY verify against the exact registered password
+  const inputPass = (password || '').trim();
+  if (!inputPass) {
+    return { success: false, message: 'Silakan masukkan kata sandi Anda.' };
+  }
+
+  // Strict validation: only the exact registered password (foundUser.password) is valid
+  const isValid = foundUser.password === inputPass;
+
+  if (!isValid) {
+    return { success: false, message: 'Kata sandi salah. Hanya bisa masuk dengan kata sandi terdaftar yang benar.' };
   }
 
   // Update last login
@@ -429,6 +486,7 @@ export function isKetuaRWOrSuperAdmin(user?: AppUser | null): boolean {
   if (!user) return false;
   const role = (user.role || '').toLowerCase();
   const username = (user.username || '').toLowerCase();
+  const nama = (user.nama || '').toLowerCase();
   return (
     role === 'super_admin' ||
     role === 'ketua_rw' ||
@@ -436,7 +494,8 @@ export function isKetuaRWOrSuperAdmin(user?: AppUser | null): boolean {
     username === 'superadmin' ||
     username === 'sa' ||
     username === 'admin' ||
-    username === 'ketuarw'
+    username === 'ketuarw' ||
+    nama.includes('eko purwanto')
   );
 }
 
@@ -539,8 +598,14 @@ export function getUserRestrictedRt(user?: AppUser | null): string | null {
 // Check if user can access a specific tab
 export function canUserAccessTab(user: AppUser | null, tab: NavTab): boolean {
   if (!user) return false;
-  // If user is admin_rw (Super Admin), dashboard and menu are always accessible
-  if (user.role === 'admin_rw') {
+
+  // Specific rule: Laporan Kejadian RW 018 ONLY accessible by Ketua RW / Super Admin / Eko Purwanto
+  if (tab === 'laporan_kejadian') {
+    return isKetuaRWOrSuperAdmin(user);
+  }
+
+  // If user is admin_rw or super_admin (Super Admin), dashboard and menu are always accessible
+  if (user.role === 'admin_rw' || user.role === 'super_admin') {
     if (tab === 'dashboard' || tab === 'menu') return true;
     const perm = getRolePermission(user.role);
     return perm.allowedTabs ? perm.allowedTabs.includes(tab) : true;

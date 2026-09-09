@@ -17,7 +17,8 @@ import {
   PbbRecord,
   MetodeBayarPbb,
   JadwalRonda,
-  AbsensiRondaRecord
+  AbsensiRondaRecord,
+  LaporanKejadian
 } from '../types';
 import {
   initialRWProfile,
@@ -38,6 +39,8 @@ import {
   initialPbb
 } from '../data/initialData';
 import { initialJadwalRonda, initialAbsensiRonda } from '../data/initialRondaData';
+import { initialLaporanKejadian } from '../data/initialLaporanKejadian';
+import { generateNextNomorLaporan } from '../utils/laporanKejadianUtils';
 import { initialUsers } from '../data/initialUsers';
 import { safeStorage } from '../utils/safeStorage';
 import { generateId } from '../utils/formatters';
@@ -86,6 +89,7 @@ const STORAGE_KEYS = {
   SURAT: 'rw018_metro_db_surat',
   JADWAL_RONDA: 'rw018_metro_db_jadwal_ronda',
   ABSENSI_RONDA: 'rw018_metro_db_absensi_ronda',
+  LAPORAN_KEJADIAN: 'rw018_metro_db_laporan_kejadian',
   INITIALIZED: 'rw018_metro_db_init_v4_iringmulyo',
 };
 
@@ -265,7 +269,14 @@ export function initFirestoreRealtimeSync() {
       }
     });
 
-    console.log('[Firestore] Real-time listeners established across all 17 RW 018 collections.');
+    // 18. Laporan Kejadian Sync
+    subscribeToCollection<LaporanKejadian>('laporan_kejadian', (cloudLaporan) => {
+      if (cloudLaporan && cloudLaporan.length > 0) {
+        setItem(STORAGE_KEYS.LAPORAN_KEJADIAN, cloudLaporan);
+      }
+    });
+
+    console.log('[Firestore] Real-time listeners established across all 18 RW 018 collections.');
   } catch (err) {
     console.warn('[Firestore] Could not start realtime listeners:', err);
   }
@@ -394,6 +405,7 @@ export function getRWProfile(): RWProfile {
   return {
     ...initialRWProfile,
     ...loaded,
+    id: loaded.id || 'rw018_main',
     namaKetuaRw: loaded.namaKetuaRw || initialRWProfile.namaKetuaRw,
     namaSekretarisRw: loaded.namaSekretarisRw || initialRWProfile.namaSekretarisRw,
     namaBendaharaRw: loaded.namaBendaharaRw || initialRWProfile.namaBendaharaRw,
@@ -410,9 +422,13 @@ export function getRWProfile(): RWProfile {
   };
 }
 export async function saveRWProfile(profile: RWProfile): Promise<boolean> {
-  setItem(STORAGE_KEYS.PROFILE, profile);
+  const profileWithId: RWProfile = {
+    ...profile,
+    id: 'rw018_main',
+  };
+  setItem(STORAGE_KEYS.PROFILE, profileWithId);
   notifySave('Profil RW 018', 'Profil kepengurusan RW 018 berhasil disimpan.');
-  return await saveDocumentOnline('profile', 'rw018_main', profile);
+  return await saveDocumentOnline('profile', 'rw018_main', profileWithId);
 }
 
 // Warga
@@ -881,6 +897,58 @@ export async function deleteAbsensiRonda(id: string): Promise<boolean> {
   return await deleteDocumentOnline('absensi_ronda', id);
 }
 
+// Laporan Kejadian RW 018
+export function getLaporanKejadianList(): LaporanKejadian[] {
+  return getItem<LaporanKejadian[]>(STORAGE_KEYS.LAPORAN_KEJADIAN, initialLaporanKejadian);
+}
+
+export async function saveLaporanKejadian(item: LaporanKejadian): Promise<boolean> {
+  const list = getLaporanKejadianList();
+  const index = list.findIndex((l) => l.id === item.id);
+  const isNew = index < 0;
+
+  // Pastikan nomor laporan terisi dan tidak ada nomor ganda
+  let finalNomor = (item.nomorLaporan || '').trim();
+  const isDuplicateNumber = list.some((l) => l.nomorLaporan === finalNomor && l.id !== item.id);
+  if (!finalNomor || isDuplicateNumber) {
+    finalNomor = generateNextNomorLaporan(list, item.tanggalKejadian || item.tanggalLaporan);
+  }
+
+  const payload: LaporanKejadian = {
+    ...item,
+    nomorLaporan: finalNomor,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (index >= 0) {
+    list[index] = payload;
+  } else {
+    list.unshift(payload);
+  }
+  setItem(STORAGE_KEYS.LAPORAN_KEJADIAN, list);
+  notifySave(
+    'Laporan Kejadian',
+    isNew
+      ? `Laporan kejadian ${payload.nomorLaporan} ("${payload.jenisKejadian}") berhasil disimpan ke Firebase.`
+      : `Laporan kejadian ${payload.nomorLaporan} berhasil diperbarui.`
+  );
+  return await saveDocumentOnline('laporan_kejadian', payload.id, payload);
+}
+
+export async function deleteLaporanKejadian(id: string): Promise<boolean> {
+  const list = getLaporanKejadianList();
+  const target = list.find((l) => l.id === id);
+  const filtered = list.filter((l) => l.id !== id);
+  setItem(STORAGE_KEYS.LAPORAN_KEJADIAN, filtered);
+  notifyDelete(
+    'Laporan Kejadian',
+    target
+      ? `Laporan kejadian ${target.nomorLaporan} berhasil dihapus.`
+      : 'Laporan kejadian berhasil dihapus.'
+  );
+  return await deleteDocumentOnline('laporan_kejadian', id);
+}
+
 // Bansos
 export function getBansosList(): BansosItem[] {
   const list = getItem<BansosItem[]>(STORAGE_KEYS.BANSOS, initialBansos);
@@ -904,7 +972,14 @@ export async function saveBansos(item: BansosItem): Promise<boolean> {
   }
   setItem(STORAGE_KEYS.BANSOS, list);
   notifySave('Data Bansos', isNew ? `Penerima bansos "${sanitizedItem.namaPenerima}" berhasil ditambahkan.` : `Data bansos "${sanitizedItem.namaPenerima}" berhasil diperbarui.`);
-  return await saveDocumentOnline('bansos', sanitizedItem.id, sanitizedItem);
+  const payload = {
+    ...sanitizedItem,
+    nama: (sanitizedItem as any).nama || sanitizedItem.namaPenerima || '',
+    namaPenerima: sanitizedItem.namaPenerima || (sanitizedItem as any).nama || '',
+    status: sanitizedItem.status || (sanitizedItem as any).statusPenyaluran || 'Disalurkan',
+    statusPenyaluran: (sanitizedItem as any).statusPenyaluran || sanitizedItem.status || 'Disalurkan',
+  };
+  return await saveDocumentOnline('bansos', sanitizedItem.id, payload);
 }
 export async function deleteBansos(id: string): Promise<boolean> {
   const list = getBansosList();
@@ -1001,7 +1076,17 @@ export async function saveKas(item: TransaksiKas): Promise<boolean> {
   setItem(STORAGE_KEYS.KAS, list);
   const formattedNominal = `Rp ${(item.jumlah || 0).toLocaleString('id-ID')}`;
   notifySave('Buku Kas RW', isNew ? `Transaksi kas "${item.keterangan || ''}" (${formattedNominal}) berhasil dicatat.` : `Transaksi kas "${item.keterangan || ''}" berhasil diperbarui.`);
-  return await saveDocumentOnline('kas', item.id, item);
+  const payload = {
+    ...item,
+    id: item.id,
+    tanggal: item.tanggal || new Date().toISOString().slice(0, 10),
+    kategori: item.kategori || 'Lain-lain',
+    jumlah: Number(item.jumlah) || 0,
+    jenis: (item as any).jenis || item.tipe || 'Pemasukan',
+    tipe: item.tipe || (item as any).jenis || 'Pemasukan',
+    keterangan: item.keterangan || '',
+  };
+  return await saveDocumentOnline('kas', item.id, payload);
 }
 export async function deleteKas(id: string): Promise<boolean> {
   const list = getKasList();
@@ -1088,7 +1173,12 @@ export async function savePengaduan(item: PengaduanWarga): Promise<boolean> {
   }
   setItem(STORAGE_KEYS.PENGADUAN, list);
   notifySave('Laporan Pengaduan', isNew ? `Laporan warga "${sanitizedItem.judul}" berhasil dikirim.` : `Status pengaduan "${sanitizedItem.judul}" berhasil diperbarui.`);
-  return await saveDocumentOnline('pengaduan', sanitizedItem.id, sanitizedItem);
+  const payload = {
+    ...sanitizedItem,
+    isi: (sanitizedItem as any).isi || sanitizedItem.deskripsi || '',
+    deskripsi: sanitizedItem.deskripsi || (sanitizedItem as any).isi || '',
+  };
+  return await saveDocumentOnline('pengaduan', sanitizedItem.id, payload);
 }
 export async function deletePengaduan(id: string): Promise<boolean> {
   const list = getPengaduanList();
@@ -1125,7 +1215,16 @@ export async function savePbb(item: PbbRecord): Promise<boolean> {
   }
   setItem(STORAGE_KEYS.PBB, list);
   notifySave('Data PBB & SHM', isNew ? `Data PBB ${sanitizedItem.namaWajibPajak} (NOP: ${sanitizedItem.nop}) berhasil ditambahkan.` : `Data PBB ${sanitizedItem.namaWajibPajak} berhasil diperbarui.`);
-  return await saveDocumentOnline('pbb', sanitizedItem.id, sanitizedItem);
+  const payload = {
+    ...sanitizedItem,
+    namaWp: (sanitizedItem as any).namaWp || sanitizedItem.namaWajibPajak || '',
+    namaWajibPajak: sanitizedItem.namaWajibPajak || (sanitizedItem as any).namaWp || '',
+    tagihan: typeof (sanitizedItem as any).tagihan === 'number' ? (sanitizedItem as any).tagihan : (sanitizedItem.totalTagihan || sanitizedItem.tagihanPokok || 0),
+    totalTagihan: typeof sanitizedItem.totalTagihan === 'number' ? sanitizedItem.totalTagihan : (sanitizedItem as any).tagihan || 0,
+    statusBayar: (sanitizedItem as any).statusBayar || sanitizedItem.statusPembayaran || 'Belum Lunas',
+    statusPembayaran: sanitizedItem.statusPembayaran || (sanitizedItem as any).statusBayar || 'Belum Lunas',
+  };
+  return await saveDocumentOnline('pbb', sanitizedItem.id, payload);
 }
 
 export async function deletePbb(id: string): Promise<boolean> {
@@ -1229,7 +1328,12 @@ export async function saveSurat(item: SuratItem): Promise<boolean> {
   }
   setItem(STORAGE_KEYS.SURAT, list);
   notifySave('Data Surat', isNew ? `Surat "${sanitizedItem.keperluan || sanitizedItem.jenisSurat}" berhasil dibuat.` : `Data surat "${sanitizedItem.keperluan || sanitizedItem.jenisSurat}" berhasil diperbarui.`);
-  return await saveDocumentOnline('surat', sanitizedItem.id, sanitizedItem);
+  const payload = {
+    ...sanitizedItem,
+    nomorSurat: (sanitizedItem as any).nomorSurat || sanitizedItem.noSurat || '',
+    noSurat: sanitizedItem.noSurat || (sanitizedItem as any).nomorSurat || '',
+  };
+  return await saveDocumentOnline('surat', sanitizedItem.id, payload);
 }
 export async function deleteSurat(id: string): Promise<boolean> {
   const list = getSuratList();
@@ -1255,107 +1359,189 @@ export const subscribeToStorage = subscribeToDB;
 export async function uploadEntireDatabaseToFirestore(): Promise<{
   success: boolean;
   totalSynced: number;
+  totalFailed?: number;
   error?: string;
 }> {
   try {
     const dbState = getFullDatabaseState();
     let count = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    // Helper to safely upload a single document
+    const safeUploadDoc = async (col: string, id: string, data: any) => {
+      try {
+        if (!id || typeof id !== 'string') {
+          console.warn(`[Sync] Skipping document with invalid ID in ${col}:`, id);
+          return;
+        }
+        const ok = await saveDocumentOnline(col, id, data);
+        if (ok) {
+          count++;
+        } else {
+          failedCount++;
+        }
+      } catch (err: any) {
+        console.warn(`[Sync] Error syncing document ${col}/${id}:`, err?.message || err);
+        failedCount++;
+        if (errors.length < 3) {
+          errors.push(`${col}/${id}: ${err?.message || 'Gagal menyimpan'}`);
+        }
+      }
+    };
 
     // 1. Profile
-    await saveDocumentOnline('profile', 'rw018_main', dbState.profile);
-    count++;
+    const profileToUpload: RWProfile = {
+      ...dbState.profile,
+      id: 'rw018_main',
+    };
+    await safeUploadDoc('profile', 'rw018_main', profileToUpload);
 
     // 2. Warga
-    for (const item of dbState.warga) {
-      await saveDocumentOnline('warga', item.id, item);
-      count++;
+    for (const item of dbState.warga || []) {
+      await safeUploadDoc('warga', item.id, item);
     }
 
     // 3. KK
-    for (const item of dbState.kk) {
-      await saveDocumentOnline('kk', item.id, item);
-      count++;
+    for (const item of dbState.kk || []) {
+      await safeUploadDoc('kk', item.id, item);
     }
 
     // 4. Kas
-    for (const item of dbState.kas) {
-      await saveDocumentOnline('kas', item.id, item);
-      count++;
+    for (const item of dbState.kas || []) {
+      const payload = {
+        ...item,
+        id: item.id,
+        tanggal: item.tanggal || new Date().toISOString().slice(0, 10),
+        kategori: item.kategori || 'Lain-lain',
+        jumlah: Number(item.jumlah) || 0,
+        jenis: (item as any).jenis || item.tipe || 'Pemasukan',
+        tipe: item.tipe || (item as any).jenis || 'Pemasukan',
+        keterangan: item.keterangan || '',
+      };
+      await safeUploadDoc('kas', item.id, payload);
     }
 
     // 5. Iuran
-    for (const item of dbState.iuran) {
-      await saveDocumentOnline('iuran', item.id, item);
-      count++;
+    for (const item of dbState.iuran || []) {
+      await safeUploadDoc('iuran', item.id, item);
     }
 
     // 6. Iuran RKM
-    for (const item of dbState.iuranRkm) {
-      await saveDocumentOnline('iuran_rkm', item.id, item);
-      count++;
+    for (const item of dbState.iuranRkm || []) {
+      await safeUploadDoc('iuran_rkm', item.id, item);
     }
 
     // 7. Warga Meninggal
-    for (const item of dbState.wargaMeninggal) {
-      await saveDocumentOnline('warga_meninggal', item.id, item);
-      count++;
+    for (const item of dbState.wargaMeninggal || []) {
+      await safeUploadDoc('warga_meninggal', item.id, item);
     }
 
     // 8. Perlengkapan RKM
-    for (const item of dbState.perlengkapanRkm) {
-      await saveDocumentOnline('perlengkapan_rkm', item.id, item);
-      count++;
+    for (const item of dbState.perlengkapanRkm || []) {
+      await safeUploadDoc('perlengkapan_rkm', item.id, item);
     }
 
     // 9. Keamanan
-    for (const item of dbState.keamanan) {
-      await saveDocumentOnline('keamanan', item.id, item);
-      count++;
+    for (const item of dbState.keamanan || []) {
+      await safeUploadDoc('keamanan', item.id, item);
+    }
+
+    // 9.b Jadwal Ronda
+    for (const item of dbState.jadwalRonda || []) {
+      await safeUploadDoc('jadwal_ronda', item.id, item);
+    }
+
+    // 9.c Absensi Ronda
+    for (const item of dbState.absensiRonda || []) {
+      await safeUploadDoc('absensi_ronda', item.id, item);
     }
 
     // 10. Bansos
-    for (const item of dbState.bansos) {
-      await saveDocumentOnline('bansos', item.id, item);
-      count++;
+    for (const item of dbState.bansos || []) {
+      const payload = {
+        ...item,
+        nama: (item as any).nama || item.namaPenerima || '',
+        namaPenerima: item.namaPenerima || (item as any).nama || '',
+        status: item.status || (item as any).statusPenyaluran || 'Disalurkan',
+        statusPenyaluran: (item as any).statusPenyaluran || item.status || 'Disalurkan',
+      };
+      await safeUploadDoc('bansos', item.id, payload);
     }
 
     // 10.b Cadangan Bansos
-    for (const item of dbState.cadanganBansos) {
-      await saveDocumentOnline('cadangan_bansos', item.id, item);
-      count++;
+    for (const item of dbState.cadanganBansos || []) {
+      await safeUploadDoc('cadangan_bansos', item.id, item);
     }
 
     // 11. UMKM
-    for (const item of dbState.umkm) {
-      await saveDocumentOnline('umkm', item.id, item);
-      count++;
+    for (const item of dbState.umkm || []) {
+      const payload = {
+        ...item,
+        namaPemilik: (item as any).namaPemilik || (item as any).pemilik || '',
+        pemilik: (item as any).pemilik || (item as any).namaPemilik || '',
+      };
+      await safeUploadDoc('umkm', item.id, payload);
     }
 
     // 12. Kegiatan
-    for (const item of dbState.kegiatan) {
-      await saveDocumentOnline('kegiatan', item.id, item);
-      count++;
+    for (const item of dbState.kegiatan || []) {
+      await safeUploadDoc('kegiatan', item.id, item);
     }
 
     // 13. Pengaduan
-    for (const item of dbState.pengaduan) {
-      await saveDocumentOnline('pengaduan', item.id, item);
-      count++;
+    for (const item of dbState.pengaduan || []) {
+      const payload = {
+        ...item,
+        isi: (item as any).isi || item.deskripsi || '',
+        deskripsi: item.deskripsi || (item as any).isi || '',
+      };
+      await safeUploadDoc('pengaduan', item.id, payload);
     }
 
     // 14. Surat
-    for (const item of dbState.surat) {
-      await saveDocumentOnline('surat', item.id, item);
-      count++;
+    for (const item of dbState.surat || []) {
+      const payload = {
+        ...item,
+        nomorSurat: (item as any).nomorSurat || item.noSurat || '',
+        noSurat: item.noSurat || (item as any).nomorSurat || '',
+      };
+      await safeUploadDoc('surat', item.id, payload);
     }
 
     // 15. PBB
-    for (const item of dbState.pbb) {
-      await saveDocumentOnline('pbb', item.id, item);
-      count++;
+    for (const item of dbState.pbb || []) {
+      const payload = {
+        ...item,
+        namaWp: (item as any).namaWp || item.namaWajibPajak || '',
+        namaWajibPajak: item.namaWajibPajak || (item as any).namaWp || '',
+        tagihan: typeof (item as any).tagihan === 'number' ? (item as any).tagihan : (item.totalTagihan || item.tagihanPokok || 0),
+        totalTagihan: typeof item.totalTagihan === 'number' ? item.totalTagihan : (item as any).tagihan || 0,
+        statusBayar: (item as any).statusBayar || item.statusPembayaran || 'Belum Lunas',
+        statusPembayaran: item.statusPembayaran || (item as any).statusBayar || 'Belum Lunas',
+      };
+      await safeUploadDoc('pbb', item.id, payload);
     }
 
-    return { success: true, totalSynced: count };
+    // 16. Laporan Kejadian
+    for (const item of dbState.laporanKejadian || []) {
+      await safeUploadDoc('laporan_kejadian', item.id, item);
+    }
+
+    if (count === 0 && failedCount > 0) {
+      return {
+        success: false,
+        totalSynced: 0,
+        totalFailed: failedCount,
+        error: errors.join('; ') || 'Gagal menyinkronkan dokumen ke Firestore.',
+      };
+    }
+
+    return {
+      success: true,
+      totalSynced: count,
+      totalFailed: failedCount,
+    };
   } catch (error) {
     console.error('Failed to upload entire db to Firestore:', error);
     return { success: false, totalSynced: 0, error: (error as Error).message };
@@ -1412,6 +1598,7 @@ export function getFullDatabaseState() {
     kegiatan: getKegiatanList(),
     pengaduan: getPengaduanList(),
     surat: getSuratList(),
+    laporanKejadian: getLaporanKejadianList(),
   };
 }
 
@@ -1438,6 +1625,7 @@ export function exportDatabaseJSON(): string {
     kegiatan: getKegiatanList(),
     pengaduan: getPengaduanList(),
     surat: getSuratList(),
+    laporanKejadian: getLaporanKejadianList(),
   };
   return JSON.stringify(fullBackup, null, 2);
 }
@@ -1466,6 +1654,7 @@ export function importDatabaseJSON(jsonStr: string): boolean {
     if (data.kegiatan) setItem(STORAGE_KEYS.KEGIATAN, data.kegiatan);
     if (data.pengaduan) setItem(STORAGE_KEYS.PENGADUAN, data.pengaduan);
     if (data.surat) setItem(STORAGE_KEYS.SURAT, data.surat);
+    if (data.laporanKejadian) setItem(STORAGE_KEYS.LAPORAN_KEJADIAN, data.laporanKejadian);
     return true;
   } catch (err) {
     console.error('Import database failed', err);

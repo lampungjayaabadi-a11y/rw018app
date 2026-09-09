@@ -32,51 +32,23 @@ try {
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
+// Initialize Firestore
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
+
 // Initialize Auth
 export const auth: Auth = getAuth(app);
 
-// Initialize Firestore with robust auto-detection and local multi-tab cache for seamless iframe & web operation
-function createFirestoreInstance(): Firestore {
-  const dbId = firebaseConfig.firestoreDatabaseId || undefined;
-  
-  // Try initializing with multi-tab persistent cache and auto-detected long polling
+// Validate Connection to Firestore
+async function testConnection() {
   try {
-    return initializeFirestore(
-      app,
-      {
-        experimentalAutoDetectLongPolling: true,
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-      },
-      dbId
-    );
-  } catch (err) {
-    // If already initialized, fetch existing instance
-    try {
-      if (dbId) {
-        return getFirestore(app, dbId);
-      }
-      return getFirestore(app);
-    } catch (fallbackErr) {
-      // Fallback with memory local cache if persistent cache is unavailable in iframe
-      try {
-        return initializeFirestore(
-          app,
-          {
-            experimentalAutoDetectLongPolling: true,
-            localCache: memoryLocalCache(),
-          },
-          dbId
-        );
-      } catch (memErr) {
-        return dbId ? getFirestore(app, dbId) : getFirestore(app);
-      }
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
     }
   }
 }
-
-export const db: Firestore = createFirestoreInstance();
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',
@@ -122,8 +94,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.warn('[Firestore Error]', JSON.stringify(errInfo));
-  return errInfo;
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 // Connection test with robust offline resilience and non-blocking background check
