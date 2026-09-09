@@ -11,6 +11,7 @@ export type NavTab =
   | 'kk'
   | 'rkm'
   | 'keamanan'
+  | 'laporan_kejadian'
   | 'bansos'
   | 'kas'
   | 'pbb'
@@ -81,17 +82,32 @@ export interface KartuKeluarga {
 }
 
 // RUKUN KEMATIAN MASYARAKAT (RKM)
+export interface BulanIuranItem {
+  bulan: number; // 1 to 12
+  namaBulan: string; // 'Januari' s/d 'Desember'
+  nominal: number;
+  bayar: boolean; // Checkbox ☑ Bayar
+  tanggalBayar?: string; // YYYY-MM-DD
+  status: 'Lunas' | 'Belum Lunas' | 'Bebas Iuran (Dhuafa)' | 'Titip RT';
+  keterangan?: string;
+  kolektor?: string;
+}
+
 export interface IuranRkmRecord {
   id: string;
   noKk: string;
+  nik?: string; // NIK Kepala Keluarga / Warga
   namaKepala: string;
   rt: string; // '039', '040', '041', '042'
-  bulanTahun: string; // e.g. "2026-08"
+  bulanTahun: string; // e.g. "2026-08" or "2026"
   nominal: number;
   status: 'Lunas' | 'Belum Lunas';
   tanggalBayar?: string;
   penerima?: string;
   kuitansiNo?: string;
+  noRekening?: string; // Kartu / Rekening iuran RKM e.g. "RKM-187202-039-0012"
+  tahun?: number; // Tahun periode iuran misal 2026
+  rincian12Bulan?: BulanIuranItem[]; // Rincian 12 Bulan Januari - Desember
 }
 
 export interface WargaMeninggalRecord {
@@ -279,6 +295,14 @@ export type UmkmCategory =
   | 'Pertanian & Ternak' 
   | 'Lainnya';
 
+export interface UmkmFotoItem {
+  id: string;
+  url: string; // Base64 or URL
+  caption?: string;
+  isUtama?: boolean;
+  uploadedAt?: string;
+}
+
 export interface UmkmItem {
   id: string;
   namaUsaha: string;
@@ -299,6 +323,9 @@ export interface UmkmItem {
   omsetBulanan?: number;
   jumlahKaryawan?: number;
   statusAktif?: boolean;
+  foto?: string; // Foto utama / sampul usaha
+  fotoList?: UmkmFotoItem[]; // Album foto / galeri usaha
+  fotoUrls?: string[]; // Array of image URLs for backwards compatibility
 }
 
 export type TransaksiType = 'Pemasukan' | 'Pengeluaran';
@@ -557,6 +584,7 @@ export interface PbbRecord {
 }
 
 export interface RWProfile {
+  id?: string;
   namaRw: string;
   nomorRw?: string;
   kelurahan: string;
@@ -606,7 +634,93 @@ export interface AppDatabase {
   kegiatan: KegiatanRw[];
   pengaduan: PengaduanWarga[];
   surat: SuratItem[];
+  laporanKejadian?: LaporanKejadian[];
   users?: AppUser[];
+}
+
+export type JenisKejadian =
+  | 'Kebakaran'
+  | 'Pencurian'
+  | 'Kecelakaan'
+  | 'Keributan/Gangguan Kamtibmas'
+  | 'Bencana Alam'
+  | 'Orang Hilang'
+  | 'Kematian/Musibah'
+  | 'Kerusakan Fasilitas'
+  | 'Kejadian Lainnya';
+
+export type StatusLaporanKejadian =
+  | 'Draft'
+  | 'Sudah Dibuat'
+  | 'Sudah Dicetak'
+  | 'Sudah Dilaporkan'
+  | 'Selesai';
+
+export interface KorbanPihakTerkait {
+  id: string;
+  nama: string;
+  nik?: string;
+  alamat: string;
+  rtRw: string;
+  noHp?: string;
+  status: 'Korban' | 'Saksi' | 'Pemilik Rumah/Barang' | 'Pihak Terkait' | 'Lainnya';
+}
+
+export interface SaksiKejadian {
+  id: string;
+  nama: string;
+  alamat: string;
+  noHp: string;
+}
+
+export interface DokumentasiKejadian {
+  id: string;
+  namaFile: string;
+  jenisFile: 'foto' | 'video' | 'dokumen';
+  waktuUpload: string;
+  url: string;
+  size?: number;
+}
+
+export interface LaporanKejadian {
+  id: string;
+  nomorLaporan: string; // e.g. '001/RW.018/IX/2026'
+  tanggalLaporan: string;
+  pelaporNama: string;
+  pelaporJabatan: string;
+  wilayah: string;
+  kelurahan: string;
+  kecamatan: string;
+  kota: string;
+  tujuanLaporan: string[]; // e.g. ['Lurah Iringmulyo', 'Camat Metro Timur', 'Kapolsek Metro Timur']
+  jenisKejadian: JenisKejadian;
+  jenisKejadianLainnya?: string;
+  hariKejadian: string;
+  tanggalKejadian: string;
+  waktuKejadian: string;
+  lokasiKejadian: string;
+  rt: '039' | '040' | '041' | '042';
+  rw: string;
+  alamatLengkap: string;
+  korban: KorbanPihakTerkait[];
+  kronologi: string;
+  korbanJiwa: 'Tidak ada' | 'Ada';
+  jumlahKorbanJiwa: number;
+  korbanLuka: 'Tidak ada' | 'Ada';
+  jumlahKorbanLuka: number;
+  kerugianMateri: 'Tidak ada' | 'Ada';
+  nilaiKerugian: number;
+  kerusakan: string;
+  tindakan: string[];
+  tindakanLainnya?: string;
+  uraianTindakan: string;
+  saksi: SaksiKejadian[];
+  dokumentasi: DokumentasiKejadian[];
+  keteranganTambahan?: string;
+  status: StatusLaporanKejadian;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
 }
 
 export type UserRole = 
@@ -637,6 +751,7 @@ export interface AppUser {
   isActive: boolean;
   lastLogin?: string;
   description?: string;
+  wargaNik?: string; // 16 digit NIK warga terdaftar jika login sebagai warga
   // Biometrics Authentication
   fingerprintEnabled?: boolean;
   faceRecognitionEnabled?: boolean;
