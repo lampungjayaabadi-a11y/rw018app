@@ -1,10 +1,10 @@
 {
-  "id": "/rw018app/",
+  "id": "./",
   "name": "Aplikasi Administrasi RW 018",
   "short_name": "RW 018",
   "description": "Aplikasi Administrasi RW 018 Kampung Banten, Kelurahan Iringmulyo, Kecamatan Metro Timur, Kota Metro, Lampung.",
-  "start_url": "/rw018app/",
-  "scope": "/rw018app/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "orientation": "portrait-primary",
@@ -16,31 +16,31 @@
   "categories": ["government", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/rw018app/pwa-192x192.png",
+      "src": "pwa-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/rw018app/pwa-512x512.png",
+      "src": "pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/rw018app/pwa-maskable-512x512.png",
+      "src": "pwa-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/rw018app/logo-rw-018.jpg",
+      "src": "logo-rw-018.jpg",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/rw018app/logo-rw-018.jpg",
+      "src": "logo-rw-018.jpg",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any"
