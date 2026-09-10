@@ -1,0 +1,412 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // PILLAR 1: GLOBAL SAFETY NET - Default Deny
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // CONNECTION TEST DOCUMENT (Firebase SDK Handshake & Verification)
+    // =========================================================================
+    match /test/{docId} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // =========================================================================
+    // VALIDATION HELPER FUNCTIONS
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 256;
+    }
+
+    function isSafeString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isSafeNumber(val, minVal, maxVal) {
+      return val is number && val >= minVal && val <= maxVal;
+    }
+
+    // --- Entity Validators ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'username', 'nama', 'role', 'isActive'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.username, 1, 64)
+        && isSafeString(data.nama, 1, 128)
+        && isSafeString(data.role, 1, 64)
+        && data.isActive is bool
+        && (!('noHp' in data) || data.noHp == null || data.noHp is string)
+        && (!('rtAccess' in data) || data.rtAccess == null || data.rtAccess is string);
+    }
+
+    function isValidProfile(data) {
+      return (!('namaRw' in data) || isSafeString(data.namaRw, 0, 128))
+        && (!('kelurahan' in data) || isSafeString(data.kelurahan, 0, 128))
+        && (!('kecamatan' in data) || isSafeString(data.kecamatan, 0, 128))
+        && (!('kotaKab' in data) || isSafeString(data.kotaKab, 0, 128))
+        && (!('id' in data) || isSafeString(data.id, 1, 128))
+        && (!('nomorRw' in data) || isSafeString(data.nomorRw, 0, 32));
+    }
+
+    function isValidWarga(data) {
+      return data.keys().hasAll(['id', 'nik', 'noKk', 'nama', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.nik, 1, 64)
+        && isSafeString(data.noKk, 1, 64)
+        && isSafeString(data.nama, 1, 128)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidKK(data) {
+      return data.keys().hasAll(['id', 'noKk', 'kepalaKeluarga', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.noKk, 1, 64)
+        && isSafeString(data.kepalaKeluarga, 1, 128)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidKas(data) {
+      return (!('id' in data) || isSafeString(data.id, 1, 128))
+        && (!('tanggal' in data) || isSafeString(data.tanggal, 0, 64))
+        && (!('kategori' in data) || isSafeString(data.kategori, 0, 128))
+        && (!('jumlah' in data) || data.jumlah is number)
+        && (!('jenis' in data) || isSafeString(data.jenis, 0, 64))
+        && (!('tipe' in data) || isSafeString(data.tipe, 0, 64))
+        && (!('keterangan' in data) || isSafeString(data.keterangan, 0, 8192));
+    }
+
+    function isValidIuran(data) {
+      return data.keys().hasAll(['id', 'namaKepala', 'rt', 'bulanTahun', 'nominal', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && (!('noKk' in data) || isSafeString(data.noKk, 0, 64))
+        && isSafeString(data.namaKepala, 1, 128)
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.bulanTahun, 1, 64)
+        && isSafeNumber(data.nominal, 0, 1000000000)
+        && isSafeString(data.status, 1, 64);
+    }
+
+    function isValidSurat(data) {
+      return data.keys().hasAll(['id', 'jenisSurat', 'nikPemohon', 'namaPemohon', 'rt', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && (!('noSurat' in data) || isSafeString(data.noSurat, 0, 128))
+        && (!('nomorSurat' in data) || isSafeString(data.nomorSurat, 0, 128))
+        && isSafeString(data.jenisSurat, 1, 128)
+        && isSafeString(data.nikPemohon, 1, 64)
+        && isSafeString(data.namaPemohon, 1, 128)
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.status, 1, 64);
+    }
+
+    function isValidIuranRKM(data) {
+      return data.keys().hasAll(['id', 'namaKepala', 'rt', 'bulanTahun', 'nominal', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && (!('noKk' in data) || isSafeString(data.noKk, 0, 64))
+        && isSafeString(data.namaKepala, 1, 128)
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.bulanTahun, 1, 64)
+        && isSafeNumber(data.nominal, 0, 1000000000)
+        && isSafeString(data.status, 1, 64);
+    }
+
+    function isValidWargaMeninggal(data) {
+      return data.keys().hasAll(['id', 'nama', 'rt', 'tanggalMeninggal'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.nama, 1, 128)
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.tanggalMeninggal, 1, 64)
+        && (!('santunanRkm' in data) || isSafeNumber(data.santunanRkm, 0, 10000000000));
+    }
+
+    function isValidPerlengkapanRKM(data) {
+      return data.keys().hasAll(['id', 'namaBarang', 'kategori', 'jumlah', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.namaBarang, 1, 128)
+        && isSafeString(data.kategori, 0, 64)
+        && isSafeNumber(data.jumlah, 0, 10000000)
+        && isSafeString(data.status, 0, 64);
+    }
+
+    function isValidKeamanan(data) {
+      return data.keys().hasAll(['id', 'namaProgram', 'kategori', 'anggaran', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.namaProgram, 1, 128)
+        && isSafeString(data.kategori, 0, 64)
+        && isSafeNumber(data.anggaran, 0, 100000000000)
+        && isSafeString(data.status, 0, 64);
+    }
+
+    function isValidBansos(data) {
+      return data.keys().hasAll(['id', 'nik', 'rt', 'jenisBansos'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.nik, 1, 64)
+        && (!('nama' in data) || isSafeString(data.nama, 0, 128))
+        && (!('namaPenerima' in data) || isSafeString(data.namaPenerima, 0, 128))
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.jenisBansos, 1, 64)
+        && (!('status' in data) || isSafeString(data.status, 0, 64))
+        && (!('statusPenyaluran' in data) || isSafeString(data.statusPenyaluran, 0, 64));
+    }
+
+    function isValidCadanganBansos(data) {
+      return data.keys().hasAll(['id', 'nik', 'nama', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.nik, 1, 64)
+        && isSafeString(data.nama, 1, 128)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidUmkm(data) {
+      return data.keys().hasAll(['id', 'namaUsaha', 'kategori', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.namaUsaha, 1, 128)
+        && (!('namaPemilik' in data) || isSafeString(data.namaPemilik, 0, 128))
+        && (!('pemilik' in data) || isSafeString(data.pemilik, 0, 128))
+        && isSafeString(data.kategori, 0, 64)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidKegiatan(data) {
+      return data.keys().hasAll(['id', 'judul', 'kategori', 'tanggal', 'lokasi'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.judul, 1, 256)
+        && isSafeString(data.kategori, 0, 64)
+        && isSafeString(data.tanggal, 1, 64)
+        && isSafeString(data.lokasi, 0, 256);
+    }
+
+    function isValidPengaduan(data) {
+      return data.keys().hasAll(['id', 'namaPelapor', 'rt', 'kategori', 'judul', 'status'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.namaPelapor, 1, 128)
+        && isSafeString(data.rt, 1, 32)
+        && isSafeString(data.kategori, 0, 64)
+        && isSafeString(data.judul, 1, 256)
+        && (!('deskripsi' in data) || isSafeString(data.deskripsi, 0, 8192))
+        && (!('isi' in data) || isSafeString(data.isi, 0, 8192))
+        && isSafeString(data.status, 0, 64);
+    }
+
+    function isValidPBB(data) {
+      return data.keys().hasAll(['id', 'nop', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.nop, 1, 64)
+        && (!('namaWp' in data) || isSafeString(data.namaWp, 0, 128))
+        && (!('namaWajibPajak' in data) || isSafeString(data.namaWajibPajak, 0, 128))
+        && isSafeString(data.rt, 1, 32)
+        && (!('tagihan' in data) || isSafeNumber(data.tagihan, 0, 10000000000))
+        && (!('totalTagihan' in data) || isSafeNumber(data.totalTagihan, 0, 10000000000))
+        && (!('statusBayar' in data) || isSafeString(data.statusBayar, 0, 64))
+        && (!('statusPembayaran' in data) || isSafeString(data.statusPembayaran, 0, 64));
+    }
+
+    function isValidJadwalRonda(data) {
+      return data.keys().hasAll(['id', 'hari', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.hari, 1, 64)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidAbsensiRonda(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'hari', 'rt'])
+        && isSafeString(data.id, 1, 128)
+        && isSafeString(data.tanggal, 1, 64)
+        && isSafeString(data.hari, 1, 64)
+        && isSafeString(data.rt, 1, 32);
+    }
+
+    function isValidSettings(data) {
+      return (!('id' in data) || isSafeString(data.id, 1, 128));
+    }
+
+    function isValidLaporanKejadian(data) {
+      return (!('id' in data) || isSafeString(data.id, 1, 128))
+        && (!('nomorLaporan' in data) || isSafeString(data.nomorLaporan, 0, 128))
+        && (!('jenisKejadian' in data) || isSafeString(data.jenisKejadian, 0, 128))
+        && (!('tanggalKejadian' in data) || isSafeString(data.tanggalKejadian, 0, 64))
+        && (!('waktuKejadian' in data) || isSafeString(data.waktuKejadian, 0, 64))
+        && (!('lokasiKejadian' in data) || isSafeString(data.lokasiKejadian, 0, 512))
+        && (!('rt' in data) || isSafeString(data.rt, 0, 32))
+        && (!('rw' in data) || isSafeString(data.rw, 0, 32))
+        && (!('kronologi' in data) || isSafeString(data.kronologi, 0, 50000));
+    }
+
+    // =========================================================================
+    // COLLECTION RULES (Granular Operations & Structural Integrity)
+    // =========================================================================
+
+    // Users Collection
+    match /users/{userId} {
+      allow get, list: if true;
+      allow create: if isValidId(userId) && isValidUser(request.resource.data);
+      allow update: if isValidId(userId) && isValidUser(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(userId);
+    }
+
+    // RW Profile (Deletion strictly forbidden for system integrity)
+    match /profile/{profileId} {
+      allow get, list: if true;
+      allow create: if isValidId(profileId) && isValidProfile(request.resource.data);
+      allow update: if isValidId(profileId) && isValidProfile(request.resource.data) && (!('id' in request.resource.data) || request.resource.data.id == profileId);
+      allow delete: if false;
+    }
+
+    // Warga Collection
+    match /warga/{wargaId} {
+      allow get, list: if true;
+      allow create: if isValidId(wargaId) && isValidWarga(request.resource.data);
+      allow update: if isValidId(wargaId) && isValidWarga(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(wargaId);
+    }
+
+    // Kartu Keluarga Collection
+    match /kk/{kkId} {
+      allow get, list: if true;
+      allow create: if isValidId(kkId) && isValidKK(request.resource.data);
+      allow update: if isValidId(kkId) && isValidKK(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(kkId);
+    }
+
+    // Kas Collection
+    match /kas/{kasId} {
+      allow get, list: if true;
+      allow create: if isValidId(kasId) && isValidKas(request.resource.data);
+      allow update: if isValidId(kasId) && isValidKas(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(kasId);
+    }
+
+    // Iuran Warga Collection
+    match /iuran/{iuranId} {
+      allow get, list: if true;
+      allow create: if isValidId(iuranId) && isValidIuran(request.resource.data);
+      allow update: if isValidId(iuranId) && isValidIuran(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(iuranId);
+    }
+
+    // Surat Pengantar Collection
+    match /surat/{suratId} {
+      allow get, list: if true;
+      allow create: if isValidId(suratId) && isValidSurat(request.resource.data);
+      allow update: if isValidId(suratId) && isValidSurat(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(suratId);
+    }
+
+    // Iuran RKM Collection
+    match /iuran_rkm/{rkmId} {
+      allow get, list: if true;
+      allow create: if isValidId(rkmId) && isValidIuranRKM(request.resource.data);
+      allow update: if isValidId(rkmId) && isValidIuranRKM(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(rkmId);
+    }
+
+    // Warga Meninggal Collection
+    match /warga_meninggal/{meninggalId} {
+      allow get, list: if true;
+      allow create: if isValidId(meninggalId) && isValidWargaMeninggal(request.resource.data);
+      allow update: if isValidId(meninggalId) && isValidWargaMeninggal(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(meninggalId);
+    }
+
+    // Perlengkapan RKM Collection
+    match /perlengkapan_rkm/{itemId} {
+      allow get, list: if true;
+      allow create: if isValidId(itemId) && isValidPerlengkapanRKM(request.resource.data);
+      allow update: if isValidId(itemId) && isValidPerlengkapanRKM(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(itemId);
+    }
+
+    // Keamanan & Pembangunan Collection
+    match /keamanan/{progId} {
+      allow get, list: if true;
+      allow create: if isValidId(progId) && isValidKeamanan(request.resource.data);
+      allow update: if isValidId(progId) && isValidKeamanan(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(progId);
+    }
+
+    // Bansos Collection
+    match /bansos/{bansosId} {
+      allow get, list: if true;
+      allow create: if isValidId(bansosId) && isValidBansos(request.resource.data);
+      allow update: if isValidId(bansosId) && isValidBansos(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(bansosId);
+    }
+
+    // Cadangan Penerima Bansos Collection
+    match /cadangan_bansos/{cadanganId} {
+      allow get, list: if true;
+      allow create: if isValidId(cadanganId) && isValidCadanganBansos(request.resource.data);
+      allow update: if isValidId(cadanganId) && isValidCadanganBansos(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(cadanganId);
+    }
+
+    // UMKM Collection
+    match /umkm/{umkmId} {
+      allow get, list: if true;
+      allow create: if isValidId(umkmId) && isValidUmkm(request.resource.data);
+      allow update: if isValidId(umkmId) && isValidUmkm(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(umkmId);
+    }
+
+    // Kegiatan Collection
+    match /kegiatan/{kegiatanId} {
+      allow get, list: if true;
+      allow create: if isValidId(kegiatanId) && isValidKegiatan(request.resource.data);
+      allow update: if isValidId(kegiatanId) && isValidKegiatan(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(kegiatanId);
+    }
+
+    // Pengaduan Collection
+    match /pengaduan/{pengaduanId} {
+      allow get, list: if true;
+      allow create: if isValidId(pengaduanId) && isValidPengaduan(request.resource.data);
+      allow update: if isValidId(pengaduanId) && isValidPengaduan(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(pengaduanId);
+    }
+
+    // PBB Collection
+    match /pbb/{pbbId} {
+      allow get, list: if true;
+      allow create: if isValidId(pbbId) && isValidPBB(request.resource.data);
+      allow update: if isValidId(pbbId) && isValidPBB(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(pbbId);
+    }
+
+    // Jadwal Ronda Malam Collection
+    match /jadwal_ronda/{rondaId} {
+      allow get, list: if true;
+      allow create: if isValidId(rondaId) && isValidJadwalRonda(request.resource.data);
+      allow update: if isValidId(rondaId) && isValidJadwalRonda(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(rondaId);
+    }
+
+    // Absensi / Presensi Ronda Malam Collection
+    match /absensi_ronda/{absensiId} {
+      allow get, list: if true;
+      allow create: if isValidId(absensiId) && isValidAbsensiRonda(request.resource.data);
+      allow update: if isValidId(absensiId) && isValidAbsensiRonda(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(absensiId);
+    }
+
+    // Settings / Role Permissions Collection
+    match /settings/{settingId} {
+      allow get, list: if true;
+      allow create: if isValidId(settingId) && isValidSettings(request.resource.data);
+      allow update: if isValidId(settingId) && isValidSettings(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(settingId);
+    }
+
+    // Laporan Kejadian RW 018 Collection
+    match /laporan_kejadian/{laporanId} {
+      allow get, list: if true;
+      allow create: if isValidId(laporanId) && isValidLaporanKejadian(request.resource.data);
+      allow update: if isValidId(laporanId) && isValidLaporanKejadian(request.resource.data) && (!('id' in request.resource.data) || !('id' in resource.data) || request.resource.data.id == resource.data.id);
+      allow delete: if isValidId(laporanId);
+    }
+  }
+}
