@@ -5,11 +5,8 @@ import logoRt040Img from '../assets/images/logo_rt_040_1787734589973.jpg';
 import logoRt041Img from '../assets/images/logo_rt_041_1787734607123.jpg';
 import logoRt042Img from '../assets/images/logo_rt_042_1787734626355.jpg';
 
-export const LOGO_RW_018 =
-  `${import.meta.env.BASE_URL}logo-rw-018.jpg`;
-export const LOGO_RW_018 = logoImg || '/logo-rw-018.jpg';
-export const LOGO_RW_018_JPG = '/logo-rw-018.jpg';
-export const LOGO_RW_018_PNG = '/logo-rw-018.png';
+export const LOGO_RW_018 = logoImg;
+export const LOGO_RW_018_JPG = `${import.meta.env.BASE_URL}logo-rw-018.jpg`;
 
 export const LOGO_RT_039 = logoRt039Img;
 export const LOGO_RT_040 = logoRt040Img;
