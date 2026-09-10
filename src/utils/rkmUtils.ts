@@ -227,3 +227,67 @@ export function calculateSaldoRkmSummary(
   };
 }
 
+export interface PembayaranTerakhirInfo {
+  bulanTerakhirLunas?: string;
+  bulanAngka?: number;
+  tanggalBayarTerakhir?: string;
+  nominalTerakhir?: number;
+  kolektorTerakhir?: string;
+  totalBulanLunas: number;
+  totalBulanTunggakan: number;
+  totalNominalTerbayar: number;
+  totalNominalTunggakan: number;
+  daftarBulanTunggakan: BulanIuranItem[];
+  daftarBulanLunas: BulanIuranItem[];
+  isLunasPenuh: boolean;
+}
+
+export function getRkmPaymentStatus(record?: IuranRkmRecord | null): PembayaranTerakhirInfo {
+  if (!record) {
+    return {
+      totalBulanLunas: 0,
+      totalBulanTunggakan: 12,
+      totalNominalTerbayar: 0,
+      totalNominalTunggakan: 120000,
+      daftarBulanTunggakan: [],
+      daftarBulanLunas: [],
+      isLunasPenuh: false
+    };
+  }
+
+  const rincian = (record.rincian12Bulan && record.rincian12Bulan.length === 12)
+    ? record.rincian12Bulan
+    : generateDefault12Bulan(
+        record.tahun || 2026,
+        record.nominal !== undefined ? record.nominal : 10000,
+        record.status === 'Lunas' ? 8 : 4,
+        record.nominal === 0,
+        record.penerima || ''
+      );
+
+  const lunasList = rincian.filter((b) => b.bayar);
+  const tunggakanList = rincian.filter((b) => !b.bayar);
+
+  // Bulan terakhir yang lunas (bulan angka tertinggi)
+  const lastPaidItem = [...lunasList].sort((a, b) => b.bulan - a.bulan)[0];
+
+  const totalTerbayar = lunasList.reduce((sum, b) => sum + (b.nominal || 0), 0);
+  const totalTunggakan = tunggakanList.reduce((sum, b) => sum + (b.nominal || 0), 0);
+  const isFull = lunasList.length === 12;
+
+  return {
+    bulanTerakhirLunas: lastPaidItem?.namaBulan,
+    bulanAngka: lastPaidItem?.bulan,
+    tanggalBayarTerakhir: lastPaidItem?.tanggalBayar || record.tanggalBayar,
+    nominalTerakhir: lastPaidItem?.nominal,
+    kolektorTerakhir: lastPaidItem?.kolektor || record.penerima,
+    totalBulanLunas: lunasList.length,
+    totalBulanTunggakan: tunggakanList.length,
+    totalNominalTerbayar: totalTerbayar,
+    totalNominalTunggakan: totalTunggakan,
+    daftarBulanTunggakan: tunggakanList,
+    daftarBulanLunas: lunasList,
+    isLunasPenuh: isFull
+  };
+}
+
