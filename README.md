@@ -1,39 +1,20 @@
-# Aplikasi Administrasi RW 018
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-Aplikasi PWA administrasi RW 018 Kampung Banten, Kelurahan Iringmulyo, Kecamatan Metro Timur, Kota Metro.
+# Run and deploy your AI Studio app
 
-## Target publikasi
+This contains everything you need to run your app locally.
 
-- Website publik: `https://lampungjayaabadi-a11y.github.io/rw018app/`
-- Warga tidak membutuhkan akun GitHub atau akun developer untuk membuka website.
-- PWA dapat dipasang dari Chrome setelah website berhasil dipublikasikan melalui HTTPS.
-- Data aplikasi menggunakan Firebase/Cloud Firestore.
+View your app in AI Studio: https://ai.studio/apps/e9d00609-bdb3-49d6-8032-bdfa33ef623a
 
-## Publikasi GitHub Pages
+## Run Locally
 
-1. Upload seluruh isi repository ke branch `main`.
-2. Buka **Settings → Pages**.
-3. Pada **Build and deployment**, pilih **GitHub Actions**.
-4. Push perubahan dan tunggu workflow **Deploy to GitHub Pages** selesai.
-5. Buka URL project Pages di atas.
+**Prerequisites:**  Node.js
 
-Workflow sudah menggunakan base `/rw018app/` agar asset Vite, manifest, dan service worker tidak mencari file dari root domain.
 
-## Penting: keamanan database
-
-File `firestore.rules` pada paket awal masih memberikan akses publik yang terlalu longgar pada beberapa koleksi. **Jangan menganggap login UI sebagai keamanan database.** Firebase Security Rules harus membatasi operasi berdasarkan Firebase Authentication/otorisasi server.
-
-Data seperti NIK, KK, alamat, nomor HP, bansos, kas, dan iuran tidak boleh dibuka untuk publik tanpa kontrol akses yang benar.
-
-## Penggunaan
-
-```bash
-npm install
-npm run dev
-```
-
-Build produksi:
-
-```bash
-npm run build
-```
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

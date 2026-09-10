@@ -5,8 +5,7 @@ import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
-  // GitHub Pages project-site base. Override with VITE_BASE_PATH for another host/repository.
-  const base = process.env.VITE_BASE_PATH || '/rw018app/';
+  const base = process.env.VITE_BASE_PATH || './';
 
   return {
     base,
