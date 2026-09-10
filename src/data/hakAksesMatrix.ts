@@ -439,11 +439,11 @@ export const HAK_AKSES_CHECKLIST: HakAksesItem[] = [
     id: 'jadwal_ronda',
     name: 'Jadwal Ronda',
     category: 'Keamanan',
-    desc: 'Pengaturan jadwal jaga malam (Senin-Minggu 23:00-04:00) dan absensi',
+    desc: 'Pengaturan jadwal jaga malam (Senin-Minggu 23:00-04:00) dan absensi ronda',
     access: {
       super_admin: 'full',
       admin_rw: 'full',
-      ketua_rw: 'view_only',
+      ketua_rw: 'full',
       sekretaris: 'edit_limited',
       bendahara: 'none',
       ketua_rt: 'rt_only',
@@ -455,24 +455,24 @@ export const HAK_AKSES_CHECKLIST: HakAksesItem[] = [
     },
   },
 
-  // 17. Laporan Kejadian
+  // 17. Laporan Kejadian RW 018
   {
     id: 'laporan_kejadian',
-    name: 'Laporan Kejadian',
+    name: 'Laporan Kejadian RW 018',
     category: 'Keamanan',
-    desc: 'Pencatatan insiden ketertiban, aduan darurat, dan penanganan siskamling',
+    desc: 'Laporan kejadian resmi RW 018 (Form Digital, AI Kronologi, Kop Dinas & PDF) khusus Ketua RW / Super Admin (Bpk. Eko Purwanto)',
     access: {
       super_admin: 'full',
       admin_rw: 'full',
-      ketua_rw: 'view_only',
-      sekretaris: 'view_only',
+      ketua_rw: 'full',
+      sekretaris: 'none',
       bendahara: 'none',
-      ketua_rt: 'edit_limited',
-      keamanan: 'full',
+      ketua_rt: 'none',
+      keamanan: 'none',
       rkm: 'none',
       pengurus_rkm: 'none',
       pengurus_dkm: 'none',
-      warga: 'create_only',
+      warga: 'none',
     },
   },
 

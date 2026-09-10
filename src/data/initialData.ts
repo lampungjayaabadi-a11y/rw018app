@@ -16,8 +16,10 @@ import {
   RWProfile,
   PbbRecord
 } from '../types';
+import { generateDefault12Bulan } from '../utils/rkmUtils';
 
 export const initialRWProfile: RWProfile = {
+  id: 'rw018_main',
   namaRw: 'RUKUN WARGA 018',
   nomorRw: '018',
   kelurahan: 'Iringmulyo',
@@ -36,7 +38,7 @@ export const initialRWProfile: RWProfile = {
   noHpSeksiKeagamaan: '085269112233',
   namaSeksiKebersihan: 'Arif R Budiman',
   noHpSeksiKebersihan: '081377889900',
-  alamatKantor: 'Jl. Pala No.1 Kelurahan Iringmulyo Kecamatan Metro Timur',
+  alamatKantor: 'Jl. Pala Nomor 1 RT 039 RW 018 Kelurahan Iringmulyo Kecamatan Metro Timur',
   logoUrl: '/logo-rw-018.png',
   periodeJabatan: '2024 - 2029',
   semboyan: 'Maju, Rukun, Transparan, Amanah & Religius',
@@ -111,7 +113,7 @@ export const initialRWProfile: RWProfile = {
     {
       id: 'kd-1',
       namaInstansi: 'Bhabinkamtibmas',
-      petugas: 'Aiptu Evodius',
+      petugas: 'Aipda Evodius (NRP. 84050233)',
       nomorTelepon: '081379712721',
       kategori: 'Keamanan Polisi',
       deskripsi: 'Petugas Pembina Keamanan & Ketertiban Masyarakat Kelurahan Iringmulyo'
@@ -554,108 +556,145 @@ export const initialIuranRKM: IuranRkmRecord[] = [
   {
     id: 'irkm-1',
     noKk: '1872021001260001',
+    nik: '1872021505720001',
     namaKepala: 'Eko Purwanto',
     rt: '039',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-01',
     penerima: 'Ketua RT 039 (Zaenal Fanani)',
-    kuitansiNo: 'RKM/039/08/2026/01'
+    kuitansiNo: 'RKM/039/08/2026/01',
+    noRekening: 'RKM-039-0001',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 8, false, 'Ketua RT 039 (Zaenal Fanani)')
   },
   {
     id: 'irkm-2',
     noKk: '1872021001260002',
+    nik: '1872021204800002',
     namaKepala: 'Zaenal Fanani',
     rt: '039',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-02',
     penerima: 'Ketua RT 039 (Zaenal Fanani)',
-    kuitansiNo: 'RKM/039/08/2026/02'
+    kuitansiNo: 'RKM/039/08/2026/02',
+    noRekening: 'RKM-039-0002',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 12, false, 'Ketua RT 039 (Zaenal Fanani)')
   },
   {
     id: 'irkm-3',
     noKk: '1872021001260003',
+    nik: '1872021809750003',
     namaKepala: 'Epi',
     rt: '040',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-03',
     penerima: 'Ketua RT 040 (Epi)',
-    kuitansiNo: 'RKM/040/08/2026/03'
+    kuitansiNo: 'RKM/040/08/2026/03',
+    noRekening: 'RKM-040-0003',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 8, false, 'Ketua RT 040 (Epi)')
   },
   {
     id: 'irkm-4',
     noKk: '1872021001260004',
+    nik: '1872022406850004',
     namaKepala: 'Etty Herawati',
     rt: '041',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-03',
     penerima: 'Ketua RT 041 (Etty Herawati)',
-    kuitansiNo: 'RKM/041/08/2026/04'
+    kuitansiNo: 'RKM/041/08/2026/04',
+    noRekening: 'RKM-041-0004',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 8, false, 'Ketua RT 041 (Etty Herawati)')
   },
   {
     id: 'irkm-5',
     noKk: '1872021001260005',
+    nik: '1872021010780005',
     namaKepala: 'Sefrizal',
     rt: '042',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-04',
     penerima: 'Ketua RT 042 (Sefrizal)',
-    kuitansiNo: 'RKM/042/08/2026/05'
+    kuitansiNo: 'RKM/042/08/2026/05',
+    noRekening: 'RKM-042-0005',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 8, false, 'Ketua RT 042 (Sefrizal)')
   },
   {
     id: 'irkm-6',
     noKk: '1872021001260006',
+    nik: '1872020101420006',
     namaKepala: 'Mbah Sastro Wardoyo',
     rt: '039',
     bulanTahun: '2026-08',
+    tahun: 2026,
     nominal: 0,
     status: 'Lunas',
     tanggalBayar: '2026-08-01',
     penerima: 'Subsidi Kas Sosial RKM (Dhuafa Lansia)',
-    kuitansiNo: 'RKM/039/08/2026/BEBAS'
+    kuitansiNo: 'RKM/039/08/2026/BEBAS',
+    noRekening: 'RKM-039-0006-DHUAFA',
+    rincian12Bulan: generateDefault12Bulan(2026, 0, 12, true, 'Subsidi Kas Sosial RKM')
   },
   {
     id: 'irkm-7',
     noKk: '1872021001260007',
+    nik: '1872021703900007',
     namaKepala: 'Rizki Kurniawan',
     rt: '040',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Lunas',
     tanggalBayar: '2026-08-05',
     penerima: 'Ketua RT 040 (Epi)',
-    kuitansiNo: 'RKM/040/08/2026/08'
+    kuitansiNo: 'RKM/040/08/2026/08',
+    noRekening: 'RKM-040-0007',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 7, false, 'Ketua RT 040 (Epi)')
   },
   {
     id: 'irkm-8',
     noKk: '1872021001260008',
+    nik: '1872020505500008',
     namaKepala: 'Ibu Hj. Mariyam',
     rt: '041',
     bulanTahun: '2026-08',
+    tahun: 2026,
     nominal: 0,
     status: 'Lunas',
     tanggalBayar: '2026-08-01',
     penerima: 'Subsidi Kas Sosial RKM (Dhuafa Lansia)',
-    kuitansiNo: 'RKM/041/08/2026/BEBAS'
+    kuitansiNo: 'RKM/041/08/2026/BEBAS',
+    noRekening: 'RKM-041-0008-DHUAFA',
+    rincian12Bulan: generateDefault12Bulan(2026, 0, 12, true, 'Subsidi Kas Sosial RKM')
   },
   {
     id: 'irkm-9',
     noKk: '1872021001260009',
+    nik: '1872022908860009',
     namaKepala: 'Agus Triono',
     rt: '042',
     bulanTahun: '2026-08',
-    nominal: 25000,
+    tahun: 2026,
+    nominal: 10000,
     status: 'Belum Lunas',
-    penerima: 'Ketua RT 042 (Sefrizal)'
+    penerima: 'Ketua RT 042 (Sefrizal)',
+    kuitansiNo: 'RKM/042/08/2026/09',
+    noRekening: 'RKM-042-0009',
+    rincian12Bulan: generateDefault12Bulan(2026, 10000, 4, false, 'Ketua RT 042 (Sefrizal)')
   }
 ];
 
@@ -999,6 +1038,23 @@ export const initialUMKM: UmkmItem[] = [
     jumlahKaryawan: 2,
     isBinaanRw: true,
     statusAktif: true,
+    foto: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=700&auto=format&fit=crop&q=80',
+    fotoList: [
+      {
+        id: 'f-u1-1',
+        url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=700&auto=format&fit=crop&q=80',
+        caption: 'Aneka Kue Basah & Roti Segar Bu Nurul',
+        isUtama: true,
+        uploadedAt: '2026-08-01T08:00:00Z',
+      },
+      {
+        id: 'f-u1-2',
+        url: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=700&auto=format&fit=crop&q=80',
+        caption: 'Paket Snack Box Rapat & Arisan Warga',
+        isUtama: false,
+        uploadedAt: '2026-08-01T08:05:00Z',
+      },
+    ],
   },
   {
     id: 'u-2',
@@ -1020,6 +1076,16 @@ export const initialUMKM: UmkmItem[] = [
     jumlahKaryawan: 2,
     isBinaanRw: true,
     statusAktif: true,
+    foto: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=700&auto=format&fit=crop&q=80',
+    fotoList: [
+      {
+        id: 'f-u2-1',
+        url: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?w=700&auto=format&fit=crop&q=80',
+        caption: 'Area Servis & Ganti Oli Rizki Motor',
+        isUtama: true,
+        uploadedAt: '2026-08-02T09:00:00Z',
+      },
+    ],
   },
   {
     id: 'u-3',
@@ -1041,6 +1107,16 @@ export const initialUMKM: UmkmItem[] = [
     jumlahKaryawan: 3,
     isBinaanRw: false,
     statusAktif: true,
+    foto: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=700&auto=format&fit=crop&q=80',
+    fotoList: [
+      {
+        id: 'f-u3-1',
+        url: 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=700&auto=format&fit=crop&q=80',
+        caption: 'Etalase Toko Sembako & Kebutuhan Harian',
+        isUtama: true,
+        uploadedAt: '2026-08-03T10:00:00Z',
+      },
+    ],
   },
   {
     id: 'u-4',
@@ -1062,6 +1138,16 @@ export const initialUMKM: UmkmItem[] = [
     jumlahKaryawan: 4,
     isBinaanRw: true,
     statusAktif: true,
+    foto: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=700&auto=format&fit=crop&q=80',
+    fotoList: [
+      {
+        id: 'f-u4-1',
+        url: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=700&auto=format&fit=crop&q=80',
+        caption: 'Koleksi Anyaman Besek & Kerajinan Ramah Lingkungan',
+        isUtama: true,
+        uploadedAt: '2026-08-04T11:00:00Z',
+      },
+    ],
   },
   {
     id: 'u-5',
@@ -1083,6 +1169,16 @@ export const initialUMKM: UmkmItem[] = [
     jumlahKaryawan: 1,
     isBinaanRw: true,
     statusAktif: true,
+    foto: 'https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=700&auto=format&fit=crop&q=80',
+    fotoList: [
+      {
+        id: 'f-u5-1',
+        url: 'https://images.unsplash.com/photo-1528459801416-a9e53bbf4e17?w=700&auto=format&fit=crop&q=80',
+        caption: 'Mesin Jahit & Kain Busana Rapi Tailor',
+        isUtama: true,
+        uploadedAt: '2026-08-05T13:00:00Z',
+      },
+    ],
   }
 ];
 
