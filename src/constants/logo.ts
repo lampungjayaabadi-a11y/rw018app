@@ -14,6 +14,7 @@ export const LOGO_RT_040 = logoRt040Img;
 export const LOGO_RT_041 = logoRt041Img;
 export const LOGO_RT_042 = logoRt042Img;
 
+// RW 018 - RT 039 sampai RT 042 logos
 export const RT_LOGOS: Record<string, string> = {
   '039': LOGO_RT_039,
   '040': LOGO_RT_040,
